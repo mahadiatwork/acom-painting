@@ -263,13 +263,27 @@ export default function NewEntry() {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 flex justify-center">
         <div className="w-full max-w-md flex gap-3">
           {step < 3 ? (
-             <PrimaryButton 
-               onClick={handleNext} 
-               disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
-               className="w-full text-lg shadow-lg"
-             >
-               Next Step <ChevronRight className="ml-2" />
-             </PrimaryButton>
+             <div className="w-full">
+               <PrimaryButton 
+                 onClick={handleNext} 
+                 disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
+                 className="w-full text-lg shadow-lg"
+               >
+                 Next Step <ChevronRight className="ml-2" />
+               </PrimaryButton>
+               
+               {step === 1 && !isStep1Valid && (
+                 <p className="text-center text-xs text-orange-600 mt-2 font-medium animate-pulse">
+                   * Select a job & check all safety boxes to proceed
+                 </p>
+               )}
+               
+               {step === 2 && !isStep2Valid && (
+                 <p className="text-center text-xs text-orange-600 mt-2 font-medium animate-pulse">
+                   * Enter start and end times to proceed
+                 </p>
+               )}
+             </div>
           ) : (
              <PrimaryButton 
                onClick={handleSubmit}
