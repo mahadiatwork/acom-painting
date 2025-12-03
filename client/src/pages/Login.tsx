@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
-import { Hammer } from "lucide-react";
+import logoUrl from "@assets/image_1764793317196.png";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -25,13 +25,9 @@ export default function Login() {
     <Layout className="bg-muted items-center justify-center p-6">
       <div className="w-full max-w-sm bg-white rounded-xl shadow-lg overflow-hidden border border-border">
         <div className="bg-secondary p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/10 mb-4 text-primary">
-            <Hammer size={32} strokeWidth={2.5} />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src={logoUrl} alt="Roof Worx Logo" className="h-24 w-auto invert brightness-0 filter" />
           </div>
-          <h1 className="font-heading text-2xl font-bold text-white tracking-wider">
-            ROOF WORX
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Field Time Entry</p>
         </div>
         
         <form onSubmit={handleLogin} className="p-6 space-y-6">

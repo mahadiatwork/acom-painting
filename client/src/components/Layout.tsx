@@ -2,6 +2,7 @@ import React from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/BottomNav";
+import logoUrl from "@assets/image_1764793317196.png";
 
 export function Layout({ children, className }: { children: React.ReactNode; className?: string }) {
   const [location] = useLocation();
@@ -23,7 +24,9 @@ export function Header({ title, user, onLogout }: { title?: string, user?: strin
       {title ? (
         <h1 className="text-xl font-bold tracking-wide text-white">{title}</h1>
       ) : (
-        <div className="font-heading font-bold text-lg text-white">Roof Worx</div>
+        <div className="flex items-center">
+          <img src={logoUrl} alt="Roof Worx" className="h-8 w-auto invert brightness-0 filter" />
+        </div>
       )}
       
       {user && (
