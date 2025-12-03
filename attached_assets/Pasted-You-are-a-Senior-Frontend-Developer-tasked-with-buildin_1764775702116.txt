@@ -1,0 +1,105 @@
+You are a Senior Frontend Developer tasked with building the mobile-first user interface for the "Roof Worx - Field Time Entry" web application.
+
+Objective: Create a functional, responsive, and on-brand UI prototype for field roofers to submit daily time entries from their phones. The app must be intuitive, high-contrast, and optimized for touch interaction.
+
+Tech Stack & Constraints:
+
+Framework: Next.js 14+ (App Router)
+
+Language: JavaScript (No TypeScript)
+
+Styling: Tailwind CSS
+
+Icons: Lucide-React
+
+Device Target: Primarily smartphones (iOS/Android web browsers).
+
+Design & Branding Guidelines (Strict):
+
+Color Palette (Based on Roof Worx Website):
+
+Primary Brand Color (Buttons, Accents, Highlights): Use the tan/beige color from the "Request an Estimate" button and phone banner. Approximately hex: #C2A88D or similar.
+
+Secondary Color (Headers, Dark Backgrounds): Use the dark gray/charcoal from the main header. Approximately hex: #2D2D2D.
+
+Backgrounds: White for main content areas, light gray for secondary sections.
+
+Text: Dark gray for primary text, white for text on dark backgrounds.
+
+UIUX Principles:
+
+Mobile-First: All layouts must be single-column and highly responsive.
+
+Large Touch Targets: Buttons and inputs must be at least 48px tall for easy tapping with gloves.
+
+High Contrast: Ensure text is easily readable outdoors.
+
+Required Views & Implementation Details:
+
+Generate the code for the following pages, using mock data to simulate database and API interactions.
+
+1. Login Screen (/login):
+
+A clean, centered card on a neutral background.
+
+Header: Display the "Roof Worx" logo (placeholder text is fine) with the dark gray background color.
+
+Form: "Email" and "Password" input fields with clear labels.
+
+Action: A large, full-width "Login" button using the Primary Brand Color (#C2A88D) with white text.
+
+2. Dashboard / Home (/):
+
+Header: A dark gray navbar showing the user's name (e.g., "John D.") and a "Logout" icon.
+
+Main Action: A prominent, large button near the top labeled "+ New Time Entry". Use the Primary Brand Color.
+
+Quick Glance: A summary card showing "Hours This Week: [Value]".
+
+Recent History: A section listing the 2 most recent time entries as compact cards (Job Name, Date, Total Hours).
+
+3. New Time Entry Flow (/entry/new): This should be a multi-step process to keep the UI clean.
+
+Step 1: Job & Safety
+
+Job Selection: A large <select> or custom dropdown to choose from active jobs.
+
+Safety Checklist (Optional Add-On): A mandatory section with 3-4 large checkboxes (e.g., "PPE Checked", "Ladder Secure", "Site Hazards Assessed"). The user cannot proceed until all are checked.
+
+Step 2: Time & Details
+
+Time Inputs: Use native mobile time pickers for: "Start Time", "Lunch Start", "Lunch End", "End Time".
+
+Notes: A multi-line textarea for general notes.
+
+Change Order Toggle: A prominent toggle switch labeled "Add Change Order / Extra Items".
+
+Conditional Fields: If the toggle is ON, reveal a textarea for "Materials/Labor Details".
+
+Step 3: Submit
+
+A summary of the entry.
+
+A large, full-width "Submit to Office" button using the Primary Brand Color.
+
+Architectural Note: On click, console log the data object and show a success message. Place a comment indicating where the Zoho CRM API call would be injected.
+
+4. Time History (/history):
+
+A list view of entries from the past 7 days.
+
+Each entry is a read-only card showing: Job Name, Date, Start/End Times, Total Hours, and a "Synced" status indicator.
+
+Architectural Note: Edits are forbidden here; they must be done in Zoho CRM.
+
+Technical Requirements:
+
+Use functional components with useState for managing form state.
+
+Create reusable UI components (e.g., PrimaryButton, InputField, JobCard) in a /components directory.
+
+Use Flexbox and CSS Grid within Tailwind classes to ensure robust responsive layouts.
+
+Include a mockData.js file with sample arrays for jobs and timeEntries to populate the UI.
+
+Architect's Note on Strategy: By enforcing the specific color palette and mobile-first constraints, we ensure the final product is both on-brand and usable in the field. The multi-step form approach reduces cognitive load for workers, and making the history read-only simplifies the MVP while maintaining Zoho CRM as the single source of truth. Focus on creating a clean, robust component structure.
