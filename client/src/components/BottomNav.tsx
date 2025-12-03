@@ -10,8 +10,8 @@ export function BottomNav() {
     { label: "Home", icon: Home, href: "/" },
     { label: "All Entries", icon: List, href: "/history" },
     { label: "Resources", icon: BookOpen, href: "/resources" },
-    { label: "Profile", icon: User, href: "/profile" },
     { label: "Notice", icon: Bell, href: "/notices" },
+    { label: "Profile", icon: User, href: "/profile" },
   ];
 
   return (
