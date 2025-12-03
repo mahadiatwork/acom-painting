@@ -1,11 +1,17 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { BottomNav } from "@/components/BottomNav";
 
 export function Layout({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [location] = useLocation();
+  const showBottomNav = location !== "/login";
+
   return (
     <div className="min-h-screen bg-muted flex justify-center">
-      <div className={cn("w-full max-w-md bg-background min-h-screen shadow-xl flex flex-col", className)}>
+      <div className={cn("w-full max-w-md bg-background min-h-screen shadow-xl flex flex-col relative", className)}>
         {children}
+        {showBottomNav && <BottomNav />}
       </div>
     </div>
   );
