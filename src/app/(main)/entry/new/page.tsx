@@ -64,6 +64,7 @@ export default function NewEntry() {
       changeOrder: hasChangeOrder ? changeOrderDetails : null,
       status: "pending",
       userId: currentUser.id,
+      totalHours: 0,
     };
 
     const parseTime = (value: string) => {
