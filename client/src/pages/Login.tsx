@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -68,9 +68,11 @@ export default function Login() {
             </div>
             
             <div className="text-center mt-6">
-              <a href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                Forgot Password?
-              </a>
+              <Link href="/forgot-password">
+                <span className="text-sm text-gray-400 hover:text-primary transition-colors cursor-pointer">
+                  Forgot Password?
+                </span>
+              </Link>
             </div>
           </form>
         </div>

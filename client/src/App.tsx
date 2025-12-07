@@ -11,11 +11,13 @@ import History from "@/pages/History";
 import Projects from "@/pages/Projects";
 import Profile from "@/pages/Profile";
 import Notices from "@/pages/Notices";
+import ForgotPassword from "@/pages/ForgotPassword";
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/" component={Dashboard} />
       <Route path="/entry/new" component={NewEntry} />
       <Route path="/history" component={History} />
