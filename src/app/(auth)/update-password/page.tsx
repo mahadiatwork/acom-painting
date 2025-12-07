@@ -48,12 +48,14 @@ export default function UpdatePassword() {
 
       if (error) throw error;
 
+      await supabase.auth.signOut();
+
       toast({
         title: "Success",
-        description: "Password updated successfully.",
+        description: "Password updated. Please login with your new password.",
       });
 
-      router.push("/");
+      router.push("/login");
     } catch (error: any) {
       toast({
         title: "Update Failed",

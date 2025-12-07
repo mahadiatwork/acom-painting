@@ -8,7 +8,7 @@ import { BottomNav } from "@/components/BottomNav";
 
 export function Layout({ children, className }: { children: React.ReactNode; className?: string }) {
   const pathname = usePathname();
-  const showBottomNav = pathname !== "/login" && pathname !== "/forgot-password";
+  const showBottomNav = pathname !== "/login" && pathname !== "/forgot-password" && pathname !== "/update-password";
 
   return (
     <div className="min-h-screen bg-muted flex justify-center">
