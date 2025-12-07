@@ -1,25 +1,43 @@
 "use client"
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Layout, Header } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { currentUser, getRecentEntries, getWeeklyHours } from "@/data/mockData";
+import { getRecentEntries, getWeeklyHours } from "@/data/mockData";
 import { Plus, Clock, CalendarDays, ChevronRight, History } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { User } from "@supabase/supabase-js";
 
 export default function Dashboard() {
   const router = useRouter();
   const recentEntries = getRecentEntries();
   const weeklyHours = getWeeklyHours();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    const fetchUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      setLoading(false);
+    };
+    fetchUser();
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
+  const userName = user?.user_metadata?.name || user?.email || "User";
+
   return (
     <Layout>
-      <Header user={currentUser.name} onLogout={handleLogout} />
+      <Header user={loading ? "..." : userName} onLogout={handleLogout} />
       
       <main className="flex-1 p-4 space-y-6 overflow-y-auto pb-24">
         {/* Main Action */}
@@ -74,4 +92,3 @@ export default function Dashboard() {
     </Layout>
   );
 }
-

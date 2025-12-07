@@ -134,7 +134,6 @@
     --color-red-50: oklch(97.1% 0.013 17.38);
     --color-red-300: oklch(80.8% 0.114 19.571);
     --color-red-400: oklch(70.4% 0.191 22.216);
-    --color-red-500: oklch(63.7% 0.237 25.331);
     --color-red-600: oklch(57.7% 0.245 27.325);
     --color-orange-50: oklch(98% 0.016 73.684);
     --color-orange-100: oklch(95.4% 0.038 75.164);
@@ -528,9 +527,6 @@
   }
   .mx-3\.5 {
     margin-inline: calc(var(--spacing) * 3.5);
-  }
-  .mx-4 {
-    margin-inline: calc(var(--spacing) * 4);
   }
   .mx-auto {
     margin-inline: auto;
@@ -1826,9 +1822,6 @@
   .text-primary-foreground {
     color: hsl(var(--primary-foreground));
   }
-  .text-red-500 {
-    color: var(--color-red-500);
-  }
   .text-secondary {
     color: hsl(var(--secondary));
   }
@@ -2052,6 +2045,9 @@
   }
   .fade-in {
     --tw-enter-opacity: 0;
+  }
+  .running {
+    animation-play-state: running;
   }
   .slide-in-from-right {
     --tw-enter-translate-x: 100%;

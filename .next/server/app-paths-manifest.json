@@ -1,9 +1,4 @@
 {
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(auth)/forgot-password/page": "app/(auth)/forgot-password/page.js",
-  "/(main)/history/page": "app/(main)/history/page.js",
   "/(main)/page": "app/(main)/page.js",
-  "/(main)/projects/page": "app/(main)/projects/page.js",
-  "/(main)/notices/page": "app/(main)/notices/page.js",
-  "/(main)/profile/page": "app/(main)/profile/page.js"
+  "/(main)/entry/new/page": "app/(main)/entry/new/page.js"
 }

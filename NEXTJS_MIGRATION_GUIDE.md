@@ -404,45 +404,8 @@ export async function GET() {
 }
 ```
 
-**`src/app/api/cron/sync-entries/route.ts`**
-```typescript
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/firebase' // Firestore
-import { zohoClient } from '@/lib/zoho'
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'
-
-export async function GET() {
-  try {
-    // Query pending entries from Firestore
-    const q = query(collection(db, 'pending_time_entries'), where('status', '==', 'pending'))
-    const snapshot = await getDocs(q)
-    
-    const results = []
-    
-    for (const docSnap of snapshot.docs) {
-      const data = docSnap.data()
-      try {
-        // Push to Zoho
-        await zohoClient.createTimeEntry(data)
-        // Mark as synced
-        await updateDoc(doc(db, 'pending_time_entries', docSnap.id), { status: 'synced' })
-        results.push({ id: docSnap.id, status: 'synced' })
-      } catch (error) {
-        // Mark as error
-        await updateDoc(doc(db, 'pending_time_entries', docSnap.id), { 
-          status: 'error', 
-          errorMessage: error.message 
-        })
-        results.push({ id: docSnap.id, status: 'error' })
-      }
-    }
-    
-    return NextResponse.json({ success: true, results })
-  } catch (error) {
-    return NextResponse.json({ error: 'Sync failed' }, { status: 500 })
-  }
-}
-```
+**Optional future step**
+If you still want to push buffered entries to Zoho, you can build a cron route that reads new rows from `src/lib/db`/`time_entries` and posts them to Zoho, marking them as exported. Otherwise the data already lives in Supabase/Neon and is ready to query.
 
 ---
 

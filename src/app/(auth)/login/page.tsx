@@ -7,21 +7,50 @@ import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const router = useRouter();
+  const { toast } = useToast();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+
+    const supabase = createClient();
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: identifier,
+        password: password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.user?.user_metadata?.force_password_change) {
+        toast({
+          title: "Password Update Required",
+          description: "Please set a new password to continue.",
+        });
+        router.push("/update-password");
+      } else {
+        router.push("/");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid credentials.",
+        variant: "destructive",
+      });
+    } finally {
       setLoading(false);
-      router.push("/");
-    }, 800);
+    }
   };
 
   return (
@@ -49,10 +78,10 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <InputField 
-              label="Email or Username" 
+              label="Email" 
               id="identifier" 
-              type="text" 
-              placeholder="Username or email address"
+              type="email" 
+              placeholder="name@roofworx.com"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
@@ -89,4 +118,3 @@ export default function Login() {
     </Layout>
   );
 }
-

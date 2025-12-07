@@ -4,8 +4,10 @@ The "Read-Aside, Write-Behind" architecture has been fully implemented in the Ne
 
 ## 1. Setup & Configuration
 - [x] **Redis Client**: Configured in `src/lib/redis.ts` using `@upstash/redis`.
-- [x] **Firebase Client**: Configured in `src/lib/firebase.ts` for Firestore access.
-- [x] **Zoho Client**: Configured in `src/lib/zoho.ts` for CRM API access (with stubbed OAuth flow).
+- [x] **Postgres (Supabase)**: Configured via `src/lib/db.ts` and `src/lib/schema.ts`.
+- [x] **Zoho Client**: Still configured for CRM access (optional).
+- [x] **Environment**: Created `.env.local` template for user credentials.
+- [x] **Cron Jobs**: Created `vercel.json` for scheduling background tasks.
 
 ## 2. Read Strategy (Projects Cache)
 - [x] **API Route**: `src/app/api/projects/route.ts` implements the Read-Aside pattern.
@@ -20,18 +22,10 @@ The "Read-Aside, Write-Behind" architecture has been fully implemented in the Ne
 
 ## 3. Write Strategy (Entries Buffer)
 - [x] **Client-Side Write**: `src/app/(main)/entry/new/page.tsx` modified.
-  - Writes directly to Firestore `pending_time_entries` collection.
+  - Sends entries to `/api/time-entries`, which writes them into Supabase/Postgres at once.
   - Provides instant "Optimistic" UI feedback.
-  - Offline-capable via Firebase SDK.
-- [x] **Sync Route**: `src/app/api/cron/sync-entries/route.ts` implements the write-behind sync.
-  - Queries `pending` entries from Firestore.
-  - Pushes to Zoho CRM.
-  - Updates status to `synced` or `error`.
+- [x] **Sync Route**: Not required in this simplified stack. Entries live in Postgres and can be exported to Zoho afterward if you still need that integration.
 
-## 4. Next Steps
-1. **Environment Variables**: Ensure all new secrets (Upstash, Firebase, Zoho) are set in `.env.local`.
-2. **Cron Jobs**: Configure Vercel Cron or an external service to hit the sync endpoints:
-   - `/api/cron/sync-projects` -> Every 15-60 minutes.
-   - `/api/cron/sync-entries` -> Every 1-5 minutes.
-3. **Firestore Rules**: Secure Firestore database to allow authenticated writes (currently open for dev).
-
+## 4. Next Steps for User
+1. **Fill Secrets**: Open `.env.local` and replace the placeholder values with your actual API keys for Upstash and Supabase (Zoho optional).
+2. **Deploy**: Deploy to Vercel to enable the cron jobs defined in `vercel.json`.

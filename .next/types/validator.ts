@@ -65,6 +65,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/(auth)/update-password/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/update-password">> = Specific
+  const handler = {} as typeof import("../../src/app/(auth)/update-password/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/(main)/entry/new/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/entry/new">> = Specific
@@ -119,10 +128,10 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
-// Validate ../../src/app/api/cron/sync-entries/route.ts
+// Validate ../../src/app/api/auth/provision/route.ts
 {
-  type __IsExpected<Specific extends RouteHandlerConfig<"/api/cron/sync-entries">> = Specific
-  const handler = {} as typeof import("../../src/app/api/cron/sync-entries/route.js")
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/auth/provision">> = Specific
+  const handler = {} as typeof import("../../src/app/api/auth/provision/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

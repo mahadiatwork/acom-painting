@@ -11,10 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
-// Firebase imports
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-
 const STEPS = ["Job & Safety", "Time & Details", "Review"];
 
 export default function NewEntry() {
@@ -58,7 +54,7 @@ export default function NewEntry() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    
+
     const submissionData = {
       jobId,
       jobName: activeJobs.find(j => j.id.toString() === jobId)?.name,
@@ -67,33 +63,42 @@ export default function NewEntry() {
       notes,
       changeOrder: hasChangeOrder ? changeOrderDetails : null,
       status: "pending",
-      userId: currentUser.id, // Using mock user ID
-      submittedAt: serverTimestamp() // Server timestamp for consistency
+      userId: currentUser.id,
     };
 
+    const parseTime = (value: string) => {
+      const [h, m] = value.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const totalMinutes = parseTime(timeData.endTime) - parseTime(timeData.startTime);
+    submissionData.totalHours = totalMinutes > 0 ? totalMinutes / 60 : 0;
+
     try {
-      // Direct Write to Firestore (Optimistic Buffer)
-      await addDoc(collection(db, "pending_time_entries"), submissionData);
-      
-      console.log("Written to Firestore Buffer:", submissionData);
+      const response = await fetch("/api/time-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submissionData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save entry");
+      }
 
       toast({
         title: "Entry Submitted",
-        description: "Your time entry has been saved and will be synced to the office.",
+        description: "Your time entry was saved. We'll keep it in Supabase.",
         duration: 3000,
       });
 
-      // Navigate immediately - "Fire and Forget" feeling for the user
-      // In a real PWA, this works even if offline
       setTimeout(() => {
         router.push("/");
       }, 500);
-      
     } catch (error) {
-      console.error("Error submitting entry:", error);
+      console.error("Failed to submit entry:", error);
       toast({
         title: "Submission Failed",
-        description: "There was an error saving your entry. Please try again.",
+        description: "Unable to save the entry. Please try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
