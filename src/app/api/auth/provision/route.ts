@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Security Check
     const authHeader = request.headers.get('Authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (authHeader !== `Bearer ${process.env.ZOHO_WEBHOOK_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
