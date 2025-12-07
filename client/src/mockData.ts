@@ -18,13 +18,39 @@ export interface Job {
   id: number;
   name: string;
   address: string;
+  salesRep: string;
+  workOrderLink: string;
 }
 
 export const activeJobs: Job[] = [
-  { id: 101, name: "Smith Residence - Roof Replacement", address: "123 Maple Ave" },
-  { id: 102, name: "Commercial Center - Repair", address: "4500 Business Park Blvd" },
-  { id: 103, name: "Johnson Gutter Install", address: "89 Oak Lane" },
-  { id: 104, name: "Westview Apartments - Inspection", address: "200 Westview Dr" }
+  { 
+    id: 101, 
+    name: "Smith Residence - Roof Replacement", 
+    address: "123 Maple Ave",
+    salesRep: "Mike T.",
+    workOrderLink: "https://workdrive.zoho.com/folder/mock-link-101"
+  },
+  { 
+    id: 102, 
+    name: "Commercial Center - Repair", 
+    address: "4500 Business Park Blvd",
+    salesRep: "Sarah L.",
+    workOrderLink: "https://workdrive.zoho.com/folder/mock-link-102"
+  },
+  { 
+    id: 103, 
+    name: "Johnson Gutter Install", 
+    address: "89 Oak Lane",
+    salesRep: "Mike T.",
+    workOrderLink: "https://workdrive.zoho.com/folder/mock-link-103"
+  },
+  { 
+    id: 104, 
+    name: "Westview Apartments - Inspection", 
+    address: "200 Westview Dr",
+    salesRep: "David R.",
+    workOrderLink: "https://workdrive.zoho.com/folder/mock-link-104"
+  }
 ];
 
 export interface TimeEntry {
