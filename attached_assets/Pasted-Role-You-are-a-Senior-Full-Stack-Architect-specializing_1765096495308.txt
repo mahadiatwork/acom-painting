@@ -1,0 +1,96 @@
+Role: You are a Senior Full-Stack Architect specializing in high-performance Next.js applications.
+
+Objective: We have an existing UI for a field-worker time entry app (Roof Worx). Your goal is to wire up the backend using a "Read-Aside, Write-Behind" architecture to ensure the app is "blazingly fast" (sub-100ms interactions) for users, even on slow networks.
+
+The Tech Stack:
+
+Frontend: Next.js (Existing)
+
+Auth & Write Buffer: Firebase (Auth + Firestore)
+
+Read Cache: Upstash Redis (via @upstash/redis)
+
+Source of Truth: Zoho CRM (via REST API)
+
+Architecture Rules (Strict Implementation): Please implement the following modules. Do not overwrite the existing UI designs, only wire up the logic.
+
+1. Setup & Configuration
+
+Install @upstash/redis, firebase, and axios.
+
+Create a setup file to initialize the Redis client and Firebase App/Firestore.
+
+Note: assume I will provide the API Keys in the Secrets pane (ZOHO_CLIENT_ID, ZOHO_REFRESH_TOKEN, UPSTASH_URL, UPSTASH_TOKEN, FIREBASE_CONFIG).
+
+2. The "Read" Strategy (Cache Layer)
+
+Goal: The "Select Project/Job" dropdown must load instantly.
+
+Implementation:
+
+Create a Next.js API Route: /api/cron/sync-projects.
+
+This route should fetch Active Deals/Projects from Zoho CRM.
+
+Crucial Optimization: Store the entire list of projects as a single JSON string in Upstash under the key CACHE_PROJECTS_LIST with a 1-hour expiry (EX 3600). Do not store items individually (to save command usage).
+
+Create a utility function getProjects() in the frontend that fetches this list from Upstash. If Upstash is empty (cache miss), fallback to fetching from Zoho directly and populate the cache.
+
+3. The "Write" Strategy (Optimistic Buffer)
+
+Goal: Hitting "Submit" on the Time Entry form must be instant.
+
+Implementation:
+
+Client-Side: When the user clicks "Submit", write the data directly to a Firestore collection named pending_time_entries.
+
+Use serverTimestamp() for the created date.
+
+Show a "Success" toast notification immediately after the Firestore write succeeds (do not wait for Zoho).
+
+4. The Background Sync (The Glue)
+
+Goal: Move data from Firestore to Zoho asynchronously.
+
+Implementation:
+
+Create a Next.js API Route: /api/cron/sync-entries.
+
+This route should query Firestore for documents where status == 'pending'.
+
+Loop through them and POST the data to Zoho CRM's "Time_Entries" module.
+
+On Success: Update the Firestore document status to 'synced'.
+
+On Failure: Update status to 'error' and save the error message in the doc.
+
+5. Security & Context
+
+Ensure the getProjects call checks that the user is authenticated via Firebase Auth.
+
+Use the existing "Forgot Password" and Login flows you built; just ensure the user ID is attached to the Time Entry in Firestore.
+
+Action Plan:
+
+Set up the API clients (Redis/Firebase).
+
+Build the /api/cron/sync-projects route (Zoho -> Upstash).
+
+Wire the "Project Select" dropdown in the UI to read from Upstash.
+
+Wire the "Submit" button to write to Firestore.
+
+Build the /api/cron/sync-entries route (Firestore -> Zoho).
+
+Start by setting up the API clients and the Project Sync route.
+
+What to do after pasting this:
+Secrets: The Agent will likely ask you for the API Keys. You need to grab these:
+
+Upstash: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (from your dashboard).
+
+Firebase: Your firebaseConfig object (API Key, Project ID).
+
+Zoho: You will need to generate a Self-Client OAuth credential in Zoho Developer Console to get the Client ID, Client Secret, and generate an initial Refresh Token.
+
+Testing the Sync: Since we aren't setting up a real "Cron" job yet, you can test the sync simply by visiting the URL in your browser (e.g., https://your-app.replit.app/api/cron/sync-projects). This will force the cache to populate.
