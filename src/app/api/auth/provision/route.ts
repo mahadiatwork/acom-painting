@@ -18,6 +18,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
+    // Check for service role key
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+       console.error('Provisioning Error: Missing SUPABASE_SERVICE_ROLE_KEY');
+       return NextResponse.json({ error: 'Configuration Error: Missing Service Role Key' }, { status: 500 });
+    }
+
     // 2. Check if user exists (optional, but good for idempotency)
     // Admin API allows listUsers, but creating with same email usually throws or returns existing.
     // We'll attempt create directly.
