@@ -7,7 +7,7 @@ import logoUrl from "@assets/image_1764793317196.png";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -40,12 +40,12 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <InputField 
-              label="Email Address" 
-              id="email" 
-              type="email" 
-              placeholder="you@roofworx.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="Email or Username" 
+              id="identifier" 
+              type="text" 
+              placeholder="Username or email address"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               className="bg-gray-50 border-gray-200 focus:bg-white"
             />
