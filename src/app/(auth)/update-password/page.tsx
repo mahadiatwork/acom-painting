@@ -48,7 +48,8 @@ export default function UpdatePassword() {
 
       if (error) throw error;
 
-      await supabase.auth.signOut();
+      // Fire and forget sign out to speed up UI
+      supabase.auth.signOut();
 
       toast({
         title: "Success",
