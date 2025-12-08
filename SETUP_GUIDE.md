@@ -28,15 +28,36 @@ We now use Postgres (Supabase/Neon) both for the job metadata and for buffering 
 2.  Enable row-level security or keep it simple for development.
 3.  Get the database URL (you can find it in the connection pool details).
 4.  Set `DATABASE_URL` in `.env.local`.
+5.  Obtain `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from API Settings.
+6.  Obtain `SUPABASE_SERVICE_ROLE_KEY` for server-side user provisioning.
 
-## 4. Zoho CRM (Optional)
+## 4. Zoho CRM (Authentication via Function)
 
-Zoho remains the destination for exported entries if you still want to push data there later.
+We use a custom Zoho Function to retrieve access tokens securely, bypassing complex OAuth management in the app.
 
-1.  Go to the [Zoho API Console](https://api-console.zoho.com/).
-2.  Create a server-based client and copy `Client ID`/`Client Secret`.
-3.  Generate a refresh token by following Zoho's OAuth flow.
-4.  Store them in `.env.local`.
+1.  **Create Zoho Connection**: Create a connection named `portal_conn` in Zoho CRM.
+2.  **Create Standalone Function**: Create a standalone function (e.g., `Get_Access_Token`) with the following code:
+    ```javascript
+    /*
+    *  Function: Get_Access_Token
+    *  Connection: portal_conn
+    */
+    access_token_resp = invokeurl
+    [
+        url :"https://utility.v1.easy-pluginz.com/api/gettoken"
+        type :GET
+        connection:"portal_conn"
+    ];
+    response = Map();
+    response.put("Content-Type","application/json");
+    response.put("body",{"access_token":access_token_resp.get("accessToken")});
+    return {"crmAPIResponse":response};
+    ```
+3.  **Publish as API**: Publish this function as a REST API to get the execution URL.
+4.  **Configure Env**: Add the URL (including the `zapikey`) to your `.env.local`:
+    ```
+    ZOHO_ACCESS_TOKEN_URL=https://www.zohoapis.com/crm/v7/functions/get_access_token/actions/execute?auth_type=apikey&zapikey=YOUR_KEY
+    ```
 
 ## 5. Running the App
 
@@ -59,11 +80,9 @@ To ensure data syncs automatically, you need to deploy to a platform that suppor
 3.  Add all Environment Variables from `.env.local` to Vercel Project Settings.
 4.  **Cron Jobs**:
     *   Vercel automatically detects `vercel.json` and sets up the cron jobs.
-    *   `sync-projects`: Runs hourly to refresh Redis.
-    *   `sync-entries`: Runs every 5 mins to push pending entries to Zoho.
+    *   `sync-projects`: Runs daily to refresh Redis.
 
 ## Verification
 
 -   **Projects**: Check if the "Select Job" dropdown populates. If empty, check Redis connection or Zoho Sync logs.
--   **Entries**: Submit an entry. It should appear in the Supabase `time_entries` table immediately. You can fetch them via `/api/time-entries` or extend the sync to Zoho if desired.
-
+-   **Entries**: Submit an entry. It should appear in the Supabase `time_entries` table immediately.
