@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ export const users = pgTable("users", {
 
 export const timeEntries = pgTable("time_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   jobId: text("job_id").notNull(),
   jobName: text("job_name").notNull(),
   date: text("date").notNull(),
@@ -22,7 +23,11 @@ export const timeEntries = pgTable("time_entries", {
   notes: text("notes").default(""),
   changeOrder: text("change_order").default(""),
   createdAt: text("created_at").default(sql`now()`),
-});
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  dateIdx: index("date_idx").on(table.date),
+  jobIdIdx: index("job_id_idx").on(table.jobId),
+}));
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -36,4 +41,3 @@ export const insertTimeEntrySchema = createInsertSchema(timeEntries).extend({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 export type User = typeof users.$inferSelect;
-

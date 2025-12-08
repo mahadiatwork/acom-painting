@@ -20,16 +20,17 @@ export async function GET() {
       const deals = await zohoClient.getDeals()
       
       if (deals && Array.isArray(deals)) {
-        // Transform Zoho data to our Job interface
+        // Transform Zoho data to match our standardized structure
         const projects = deals.map((deal: any) => ({
           id: deal.id,
           name: deal.Deal_Name,
-          address: deal.Shipping_Street || 'Address not set',
-          salesRep: deal.Owner?.name || 'Unknown',
-          workOrderLink: deal.Work_Order_URL || '#'
+          customer: deal.Account_Name?.name || 'Unknown',
+          status: deal.Stage || 'Active',
+          address: deal.Shipping_Street || '',
+          salesRep: deal.Owner?.name || '',
         }))
 
-        // Cache the fresh data
+        // Cache the fresh data (1 hour fallback expiry)
         await redis.set('CACHE_PROJECTS_LIST', JSON.stringify(projects), { ex: 3600 })
         
         return NextResponse.json(projects)
@@ -39,8 +40,7 @@ export async function GET() {
       // Continue to fallback
     }
 
-    // 3. Final Fallback: Return mock data if everything else fails
-    // This ensures the app is usable even if integrations are down
+    // 3. Final Fallback: Return mock data
     console.warn('Returning mock data as fallback')
     return NextResponse.json(activeJobs)
 

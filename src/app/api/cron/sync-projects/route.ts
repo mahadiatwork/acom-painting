@@ -4,36 +4,41 @@ import { zohoClient } from '@/lib/zoho'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log('[Cron] Starting Project Sync...')
+    // Optional: Check for Authorization header if you want to secure this endpoint manually
+    // const authHeader = request.headers.get('Authorization');
+    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { ... }
 
-    // 1. Fetch from Zoho CRM
+    console.log('[Cron] Starting Project Sync (Reconciliation)...')
+
+    // 1. Fetch ALL active deals from Zoho CRM
     const deals = await zohoClient.getDeals()
     
     if (!deals || !Array.isArray(deals)) {
       throw new Error('Invalid response from Zoho CRM')
     }
 
-    // 2. Transform Data
+    // 2. Transform Data to match frontend needs
     const projects = deals.map((deal: any) => ({
       id: deal.id,
       name: deal.Deal_Name,
-      address: deal.Shipping_Street || 'Address not set',
-      salesRep: deal.Owner?.name || 'Unknown',
-      workOrderLink: deal.Work_Order_URL || '#'
+      customer: deal.Account_Name?.name || 'Unknown',
+      status: deal.Stage || 'Active',
+      // Add other fields if needed for the UI
     }))
 
-    // 3. Update Redis Cache (1 hour expiry)
-    // We use a slightly longer expiry here to ensure data is always available
-    // The cron should run every ~5-15 minutes to keep it fresh
-    await redis.set('CACHE_PROJECTS_LIST', JSON.stringify(projects), { ex: 3600 })
+    // 3. Overwrite Redis Cache
+    // We store the entire list under one key for O(1) retrieval
+    // Expiry: 25 hours (allows for one missed daily sync without outage)
+    await redis.set('CACHE_PROJECTS_LIST', JSON.stringify(projects), { ex: 90000 })
     
     console.log(`[Cron] Synced ${projects.length} projects to Redis`)
 
     return NextResponse.json({ 
       success: true, 
       count: projects.length,
+      mode: 'reconciliation',
       timestamp: new Date().toISOString()
     })
 
