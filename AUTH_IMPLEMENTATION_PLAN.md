@@ -43,3 +43,4 @@ This plan outlines the steps to implement an authentication flow where users are
 - [ ] Update the existing `Layout.tsx` header to show the real user name from Supabase Auth.
 - [ ] Update `src/lib/schema.ts` if we need to link the `users` table to Supabase IDs (optional, since metadata handles the mapping).
 
+

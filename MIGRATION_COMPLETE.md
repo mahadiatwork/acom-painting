@@ -111,3 +111,4 @@ The React Vite application has been successfully migrated to Next.js 15 with App
 - [ ] Profile page with logout works
 - [ ] Logo displays correctly everywhere
 
+

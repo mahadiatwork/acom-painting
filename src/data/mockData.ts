@@ -104,3 +104,4 @@ export const getWeeklyHours = (): number => {
   return 38.5; // Mock value
 };
 
+

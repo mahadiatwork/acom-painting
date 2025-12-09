@@ -77,3 +77,4 @@ Deployment failed with "Hobby accounts are limited to daily cron jobs".
 -   Added `supabase.auth.signOut()` and redirected to `/login` after password update.
 -   **Lesson:** explicit layout control per route is often necessary. Password changes should always invalidate the current session for security.
 
+
