@@ -164,10 +164,28 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/webhooks/assignments/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/assignments">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/assignments/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/webhooks/projects/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/projects">> = Specific
   const handler = {} as typeof import("../../src/app/api/webhooks/projects/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/webhooks/users/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/users">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/users/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

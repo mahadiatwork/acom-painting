@@ -11,25 +11,73 @@ import { User } from "@supabase/supabase-js";
 export default function Profile() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+    const supabase = createClient();
+
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+      }
+      setLoading(false);
     };
-    fetchUser();
-  }, []);
+
+    getInitialSession();
+
+    // Listen for auth state changes (session updates, login, logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          setUser(null);
+          // If session is lost, redirect to login
+          if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+            router.push("/login");
+          }
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleLogout = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    const { error } = await supabase.auth.signOut();
+    
+    if (!error) {
+      // Clear local state
+      setUser(null);
+      // Redirect to login
+      router.push("/login");
+      // Force a hard refresh to clear any cached data
+      router.refresh();
+    }
   };
 
-  const name = user?.user_metadata?.name || "User";
+  const name = user?.user_metadata?.name || user?.email?.split('@')[0] || "User";
   const email = user?.email || "";
   const zohoId = user?.user_metadata?.zoho_id || "N/A";
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="bg-secondary text-white p-4 shadow-md">
+          <h1 className="text-xl font-bold tracking-wide">My Profile</h1>
+        </div>
+        <main className="flex-1 p-4 pb-24 flex items-center justify-center">
+          <div className="text-gray-500">Loading...</div>
+        </main>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -41,7 +89,7 @@ export default function Profile() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
           <div className="h-24 bg-primary/20 relative">
              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-secondary rounded-full border-4 border-white flex items-center justify-center text-white">
-               <span className="text-2xl font-bold">{name.charAt(0)}</span>
+               <span className="text-2xl font-bold">{name.charAt(0).toUpperCase()}</span>
              </div>
           </div>
           <div className="pt-12 pb-6 px-4 text-center">
@@ -53,14 +101,14 @@ export default function Profile() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden divide-y divide-gray-100 mb-8">
           <div className="p-4 flex items-center gap-4">
             <Mail className="text-gray-400" size={20} />
-            <div>
+            <div className="flex-1">
               <p className="text-xs text-gray-400 uppercase">Email</p>
-              <p className="text-gray-800 font-medium">{email}</p>
+              <p className="text-gray-800 font-medium">{email || "Not available"}</p>
             </div>
           </div>
           <div className="p-4 flex items-center gap-4">
             <Shield className="text-gray-400" size={20} />
-            <div>
+            <div className="flex-1">
               <p className="text-xs text-gray-400 uppercase">Zoho ID</p>
               <p className="text-gray-800 font-medium">{zohoId}</p>
             </div>

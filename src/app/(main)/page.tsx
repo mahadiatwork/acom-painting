@@ -18,19 +18,52 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+    const supabase = createClient();
+
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+      }
       setLoading(false);
     };
-    fetchUser();
-  }, []);
+
+    getInitialSession();
+
+    // Listen for auth state changes (session updates, login, logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          setUser(null);
+          // If session is lost, redirect to login
+          if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+            router.push("/login");
+          }
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleLogout = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    const { error } = await supabase.auth.signOut();
+    
+    if (!error) {
+      // Clear local state
+      setUser(null);
+      // Redirect to login
+      router.push("/login");
+      // Force a hard refresh to clear any cached data
+      router.refresh();
+    }
   };
 
   const userName = user?.user_metadata?.name || user?.email || "User";

@@ -112,3 +112,4 @@ The React Vite application has been successfully migrated to Next.js 15 with App
 - [ ] Logo displays correctly everywhere
 
 
+
