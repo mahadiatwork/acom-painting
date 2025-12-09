@@ -16,38 +16,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    // 2. Fetch current cache
-    // We treat Redis as the "Read Model". We patch it directly.
-    const cachedData = await redis.get<any[]>('CACHE_PROJECTS_LIST') || []
+    // 2. Fetch existing deal from Global Hash to preserve fields
+    const existingJson = await redis.hget<string>('projects:data', String(id))
+    const existingProject = existingJson ? JSON.parse(existingJson) : {}
     
-    // 3. Transform incoming deal
+    // 3. Transform & Merge
     const newProject = {
+      ...existingProject, 
       id: String(id),
       name: Deal_Name,
-      customer: Account_Name || 'Unknown',
-      status: Stage || 'Active'
+      customer: Account_Name || existingProject.customer || 'Unknown',
+      status: Stage || existingProject.status || 'Active',
+      
+      // New Fields (mapped from Zoho payload keys)
+      supplierColor: payload.Supplier_Color || existingProject.supplierColor || '',
+      trimColor: payload.Trim_Coil_Color || existingProject.trimColor || '',
+      accessoryColor: payload.Shingle_Accessory_Color || existingProject.accessoryColor || '',
+      gutterType: payload.Gutter_Types || existingProject.gutterType || '',
+      sidingStyle: payload.Siding_Style || existingProject.sidingStyle || '',
+      
+      // Fields that might be missing in webhook but exist in cache
+      address: payload.Shipping_Street || existingProject.address || '',
+      salesRep: payload.Owner || existingProject.salesRep || '',
     }
 
-    // 4. Update List (Upsert)
-    const existingIndex = cachedData.findIndex(p => p.id === newProject.id)
-    
-    if (existingIndex >= 0) {
-      cachedData[existingIndex] = newProject
-    } else {
-      cachedData.push(newProject)
-    }
+    // 4. Update Global Hash
+    // We treat Redis as the "Read Model". We patch it directly.
+    await redis.hset('projects:data', { [String(id)]: JSON.stringify(newProject) })
 
-    // 5. Save back to Redis
-    await redis.set('CACHE_PROJECTS_LIST', JSON.stringify(cachedData), { ex: 90000 })
+    console.log(`[Webhook] Patched project ${id} in Redis Hash`)
 
-    console.log(`[Webhook] Patched project ${id} in Redis`)
-
-    return NextResponse.json({ success: true, action: existingIndex >= 0 ? 'updated' : 'created' })
+    return NextResponse.json({ success: true, action: existingJson ? 'updated' : 'created' })
 
   } catch (error) {
     console.error('[Webhook] Project Patch failed:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-
-

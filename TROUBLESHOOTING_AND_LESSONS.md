@@ -77,4 +77,16 @@ Deployment failed with "Hobby accounts are limited to daily cron jobs".
 -   Added `supabase.auth.signOut()` and redirected to `/login` after password update.
 -   **Lesson:** explicit layout control per route is often necessary. Password changes should always invalidate the current session for security.
 
+## 8. Data Sync Strategy & Scalability (Global vs User-Scoped)
 
+**The Evolution:**
+1.  **Phase 1 (Global):** We synced ALL deals to a single Redis key.
+    *   *Problem:* Every user saw every project. No privacy/relevance.
+2.  **Phase 2 (Iterative Sync):** We considered fetching "Related Deals" for each user individually.
+    *   *Bottleneck:* This causes an **N+1 API Call** problem. For 100 users, we make 101 calls. This hits Zoho API limits and times out Vercel functions.
+3.  **Phase 3 (Junction Module - The Fix):** We utilized a custom module `Portal_Us_X_Job_Ticke` acting as a junction table.
+    *   *Benefit:* We fetch **ALL** connections in a single API call.
+    *   *Result:* Sync time reduced from O(Users) to O(1). "Blazingly fast" and scalable.
+
+**Lesson:**
+When syncing relational data from Zoho, avoid iterating parent records to fetch children. Instead, fetch the child/junction module directly and group in code.

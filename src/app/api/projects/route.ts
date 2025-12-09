@@ -1,48 +1,62 @@
 import { NextResponse } from 'next/server'
 import { redis } from '@/lib/redis'
-import { zohoClient } from '@/lib/zoho'
-import { activeJobs } from '@/data/mockData'
+import { createClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    // 1. Try to get from Redis Cache
-    const cachedProjects = await redis.get('CACHE_PROJECTS_LIST')
+    // 1. Authenticate User
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user || !user.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    console.log(`[API] Fetching projects for user: ${user.email}`)
+
+    // 2. Fetch User's Allowed Project IDs
+    const projectIds = await redis.smembers(`user:${user.email}:projects`)
     
-    if (cachedProjects) {
-      console.log('Serving projects from Redis Cache')
-      return NextResponse.json(cachedProjects)
+    if (!projectIds || projectIds.length === 0) {
+      console.log(`[API] No projects found for ${user.email}`)
+      return NextResponse.json([])
     }
 
-    console.log('Cache miss - Fetching from Zoho')
-
-    // 2. Fallback: Fetch from Zoho directly (Read-Through)
-    try {
-      const deals = await zohoClient.getDeals()
-      
-      if (deals && Array.isArray(deals)) {
-        // Transform Zoho data to match our standardized structure
-        const projects = deals.map((deal: any) => ({
-          id: deal.id,
-          name: deal.Deal_Name,
-          customer: deal.Account_Name?.name || 'Unknown',
-          status: deal.Stage || 'Active',
-          address: deal.Shipping_Street || '',
-          salesRep: deal.Owner?.name || '',
-        }))
-
-        // Cache the fresh data (1 hour fallback expiry)
-        await redis.set('CACHE_PROJECTS_LIST', JSON.stringify(projects), { ex: 3600 })
-        
-        return NextResponse.json(projects)
-      }
-    } catch (zohoError) {
-      console.error('Failed to fetch from Zoho:', zohoError)
-      // Continue to fallback
+    // 3. Fetch Details for Allowed IDs (Batch Fetch)
+    // hmget returns values for the requested fields (IDs)
+    const projectsJson = await redis.hmget('projects:data', ...projectIds)
+    
+    if (!projectsJson) {
+      return NextResponse.json([])
     }
 
-    // 3. Final Fallback: Return mock data
-    console.warn('Returning mock data as fallback')
-    return NextResponse.json(activeJobs)
+    // 4. Parse and Filter (remove nulls if ID missing in hash)
+    const projects = Object.values(projectsJson)
+      .filter((json): json is string => typeof json === 'string') // hmget returns { key: value } or array? Upstash SDK usually returns value or null
+      // Wait, upstash hmget returns Record<string, unknown> or unknown[] depending on usage?
+      // If I pass multiple keys, it returns an array of values in order.
+      // Let's verify via Upstash docs behavior assumption: it returns (string | null)[] usually.
+      // But upstash-redis might return differently.
+      // Actually, standard redis hmget returns array. 
+      // If upstash-redis returns object, Object.values covers it.
+      // Let's assume array for safety if spread passed.
+    
+    // Safety: If projectsJson is an object (common in some libs), values() works. 
+    // If array, values() works too.
+    const parsedProjects = Object.values(projectsJson)
+      .filter(item => item !== null && item !== undefined)
+      .map(json => {
+        try {
+          return typeof json === 'string' ? JSON.parse(json) : json
+        } catch (e) {
+          return null
+        }
+      })
+      .filter(p => p !== null)
+
+    return NextResponse.json(parsedProjects)
 
   } catch (error) {
     console.error('Failed to fetch projects:', error)

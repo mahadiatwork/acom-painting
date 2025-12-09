@@ -23,13 +23,8 @@ class ZohoClient {
     }
 
     try {
-      // 1. Try Custom Function Auth (Prioritized)
       if (this.accessTokenUrl) {
         const response = await axios.get(this.accessTokenUrl);
-        // The structure depends on how the Deluge function returns it. 
-        // Based on setup guide: { "access_token": "..." }
-        // If wrapped in crmAPIResponse: response.data.crmAPIResponse.body.access_token
-        
         let token = response.data.access_token;
         if (!token && response.data.crmAPIResponse?.body?.access_token) {
            token = response.data.crmAPIResponse.body.access_token;
@@ -37,12 +32,11 @@ class ZohoClient {
 
         if (token) {
           this.accessToken = token;
-          this.tokenExpiry = Date.now() + 3500 * 1000; // Assume 1 hour minus buffer
+          this.tokenExpiry = Date.now() + 3500 * 1000;
           return this.accessToken;
         }
       }
 
-      // 2. Fallback to Standard OAuth Refresh Flow
       if (this.clientId && this.refreshToken && this.clientSecret) {
         const params = new URLSearchParams({
           refresh_token: this.refreshToken,
@@ -70,7 +64,6 @@ class ZohoClient {
 
   async getDeals() {
     try {
-      // Mock Data if no credentials at all
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
         console.warn('Zoho credentials not set, returning mock data');
         return [
@@ -79,19 +72,12 @@ class ZohoClient {
       }
 
       const token = await this.getAccessToken();
-      
-      // Fetch active deals
-      // In Zoho, you might filter by stage, e.g., view_id or cvid if you have a custom view
       const response = await axios.get(`${this.apiDomain}/crm/v2/Deals`, {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${token}`
-        },
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
         params: {
-            // Optional: fetch only necessary fields to reduce payload
-            fields: 'id,Deal_Name,Account_Name,Stage,Pipeline'
+            fields: 'id,Deal_Name,Account_Name,Stage,Pipeline,Shipping_Street,Owner,Supplier_Color,Trim_Coil_Color,Shingle_Accessory_Color,Gutter_Types,Siding_Style'
         }
       });
-      
       return response.data.data;
     } catch (error) {
       console.error('Zoho API Error (getDeals):', error);
@@ -99,20 +85,47 @@ class ZohoClient {
     }
   }
 
+  async getPortalUsers() {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
+      const token = await this.getAccessToken();
+      const response = await axios.get(`${this.apiDomain}/crm/v2/Portal_Users`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        params: { fields: 'id,Email,Full_Name' }
+      });
+      return response.data.data;
+    } catch (error) {
+      console.error('Zoho API Error (getPortalUsers):', error);
+      return [];
+    }
+  }
+
+  async getUserJobConnections() {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
+      const token = await this.getAccessToken();
+      // Fetch from the new junction module: Portal_Us_X_Job_Ticke
+      const response = await axios.get(`${this.apiDomain}/crm/v2/Portal_Us_X_Job_Ticke`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        params: { fields: 'Portal_User,Job_Ticket,Name' } 
+      });
+      return response.data.data;
+    } catch (error) {
+      console.error('Zoho API Error (getUserJobConnections):', error);
+      return [];
+    }
+  }
+
   async createTimeEntry(data: any) {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
-        console.log('Zoho credentials not set, mock creation');
         return { id: 'mock-id-123' };
       }
-
       const token = await this.getAccessToken();
       const response = await axios.post(`${this.apiDomain}/crm/v2/Time_Entries`, {
         data: [data]
       }, {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${token}`
-        }
+        headers: { Authorization: `Zoho-oauthtoken ${token}` }
       });
       return response.data.data[0];
     } catch (error) {

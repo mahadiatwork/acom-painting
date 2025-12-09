@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField, TextAreaField } from "@/components/FormFields";
-import { activeJobs, currentUser } from "@/data/mockData";
-import { ArrowLeft, HardHat, Check, ChevronRight, Save } from "lucide-react";
+import { ArrowLeft, HardHat, Check, ChevronRight, Save, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useProjects } from "@/hooks/useProjects";
+import { createClient } from "@/lib/supabase/client";
 
 const STEPS = ["Job & Safety", "Time & Details", "Review"];
 
@@ -19,6 +20,9 @@ export default function NewEntry() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Data Fetching
+  const { data: projects, isLoading: isLoadingProjects } = useProjects();
+
   // Form State
   const [jobId, setJobId] = useState("");
   const [safetyChecks, setSafetyChecks] = useState({
@@ -55,27 +59,40 @@ export default function NewEntry() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
 
-    const submissionData = {
-      jobId,
-      jobName: activeJobs.find(j => j.id.toString() === jobId)?.name,
-      safetyChecks,
-      ...timeData,
-      notes,
-      changeOrder: hasChangeOrder ? changeOrderDetails : null,
-      status: "pending",
-      userId: currentUser.id,
-      totalHours: 0,
-    };
-
-    const parseTime = (value: string) => {
-      const [h, m] = value.split(":").map(Number);
-      return h * 60 + m;
-    };
-
-    const totalMinutes = parseTime(timeData.endTime) - parseTime(timeData.startTime);
-    submissionData.totalHours = totalMinutes > 0 ? totalMinutes / 60 : 0;
-
     try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      const submissionData = {
+        jobId,
+        jobName: projects?.find(j => j.id.toString() === jobId)?.name,
+        safetyChecks,
+        ...timeData,
+        notes,
+        changeOrder: hasChangeOrder ? changeOrderDetails : null,
+        status: "pending",
+        userId: user.id,
+        totalHours: 0,
+      };
+
+      const parseTime = (value: string) => {
+        if (!value) return 0;
+        const [h, m] = value.split(":").map(Number);
+        return h * 60 + m;
+      };
+
+      const totalMinutes = parseTime(timeData.endTime) - parseTime(timeData.startTime);
+      const lunchMinutes = (timeData.lunchStart && timeData.lunchEnd) 
+        ? parseTime(timeData.lunchEnd) - parseTime(timeData.lunchStart) 
+        : 0;
+      
+      const netMinutes = totalMinutes - lunchMinutes;
+      submissionData.totalHours = netMinutes > 0 ? Number((netMinutes / 60).toFixed(2)) : 0;
+
       const response = await fetch("/api/time-entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -99,7 +116,7 @@ export default function NewEntry() {
       console.error("Failed to submit entry:", error);
       toast({
         title: "Submission Failed",
-        description: "Unable to save the entry. Please try again.",
+        description: error instanceof Error ? error.message : "Unable to save the entry. Please try again.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -139,16 +156,23 @@ export default function NewEntry() {
               </h2>
               <div className="space-y-2">
                 <Label className="text-gray-500 font-semibold">Active Job</Label>
-                <select 
-                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-                  value={jobId}
-                  onChange={(e) => setJobId(e.target.value)}
-                >
-                  <option value="" disabled>Select a job...</option>
-                  {activeJobs.map(job => (
-                    <option key={job.id} value={job.id}>{job.name}</option>
-                  ))}
-                </select>
+                {isLoadingProjects ? (
+                  <div className="flex items-center space-x-2 p-3 border rounded-md bg-gray-50 text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading jobs...</span>
+                  </div>
+                ) : (
+                  <select 
+                    className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                    value={jobId}
+                    onChange={(e) => setJobId(e.target.value)}
+                  >
+                    <option value="" disabled>Select a job...</option>
+                    {projects?.map(job => (
+                      <option key={job.id} value={job.id}>{job.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </section>
 
@@ -268,7 +292,7 @@ export default function NewEntry() {
                   <div className="flex justify-between border-b pb-2">
                     <span className="text-gray-500">Job</span>
                     <span className="font-bold text-gray-800 text-right w-1/2 truncate">
-                      {activeJobs.find(j => j.id.toString() === jobId)?.name}
+                      {projects?.find(j => j.id.toString() === jobId)?.name}
                     </span>
                   </div>
                   <div className="flex justify-between border-b pb-2">

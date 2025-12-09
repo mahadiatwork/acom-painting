@@ -2,13 +2,37 @@
 
 import React, { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { activeJobs } from "@/data/mockData";
-import { Briefcase, MapPin, User, FileText, ChevronRight, ExternalLink, ArrowLeft } from "lucide-react";
+import { Briefcase, MapPin, User, FileText, ChevronRight, ExternalLink, ArrowLeft, Loader2, Info } from "lucide-react";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { useProjects } from "@/hooks/useProjects";
 
 export default function Projects() {
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
-  const selectedJob = activeJobs.find(j => j.id === selectedJobId);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const { data: projects, isLoading, error } = useProjects();
+  
+  const selectedJob = projects?.find(j => j.id === selectedJobId);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+          <p className="text-gray-500 text-sm">Loading projects...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+         <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] p-4 text-center">
+          <p className="text-red-500 mb-2">Failed to load projects</p>
+          <button onClick={() => window.location.reload()} className="text-primary underline">Retry</button>
+        </div>
+      </Layout>
+    )
+  }
 
   if (selectedJob) {
     return (
@@ -33,7 +57,7 @@ export default function Projects() {
                 <MapPin className="text-primary mt-1 shrink-0" size={20} />
                 <div>
                   <p className="text-xs text-gray-400 uppercase font-semibold">Address</p>
-                  <p className="text-gray-800 font-medium leading-relaxed">{selectedJob.address}</p>
+                  <p className="text-gray-800 font-medium leading-relaxed">{selectedJob.address || 'N/A'}</p>
                 </div>
               </div>
 
@@ -41,9 +65,40 @@ export default function Projects() {
                 <User className="text-primary mt-1 shrink-0" size={20} />
                 <div>
                   <p className="text-xs text-gray-400 uppercase font-semibold">Sales Rep</p>
-                  <p className="text-gray-800 font-medium">{selectedJob.salesRep}</p>
+                  <p className="text-gray-800 font-medium">{selectedJob.salesRep || 'N/A'}</p>
                 </div>
               </div>
+            </div>
+          </div>
+          
+          {/* New Project Specs Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+             <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
+                <Info size={20} className="text-gray-600" /> Job Specs
+              </h2>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-4">
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Supplier Color</p>
+                    <p className="text-gray-800 font-medium">{selectedJob.supplierColor || '-'}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Trim Color</p>
+                    <p className="text-gray-800 font-medium">{selectedJob.trimColor || '-'}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Accessory Color</p>
+                    <p className="text-gray-800 font-medium">{selectedJob.accessoryColor || '-'}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Gutter Type</p>
+                    <p className="text-gray-800 font-medium">{selectedJob.gutterType || '-'}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-semibold">Siding Style</p>
+                    <p className="text-gray-800 font-medium">{selectedJob.sidingStyle || '-'}</p>
+                </div>
             </div>
           </div>
 
@@ -59,12 +114,12 @@ export default function Projects() {
               </p>
               
               <a 
-                href={selectedJob.workOrderLink} 
+                href={selectedJob.workOrderLink || '#'} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="block"
               >
-                <PrimaryButton className="w-full flex items-center justify-center gap-2">
+                <PrimaryButton className="w-full flex items-center justify-center gap-2" disabled={!selectedJob.workOrderLink}>
                   Open Work Order <ExternalLink size={18} />
                 </PrimaryButton>
               </a>
@@ -82,7 +137,15 @@ export default function Projects() {
       </div>
       
       <main className="flex-1 p-4 space-y-3 pb-24">
-        {activeJobs.map((job) => (
+        {projects?.length === 0 && (
+            <div className="text-center p-8 text-gray-500">
+                <Briefcase size={48} className="mx-auto mb-4 opacity-20" />
+                <p>No active projects found.</p>
+                <p className="text-xs mt-2">Check back later or contact your admin.</p>
+            </div>
+        )}
+        
+        {projects?.map((job) => (
           <div 
             key={job.id} 
             onClick={() => setSelectedJobId(job.id)}
@@ -98,11 +161,11 @@ export default function Projects() {
             <div className="pl-6 space-y-1">
               <div className="flex items-center text-sm text-gray-600">
                 <MapPin size={14} className="mr-2 text-gray-400" />
-                {job.address}
+                {job.address || 'No Address'}
               </div>
               <div className="flex items-center text-sm text-gray-600">
                 <User size={14} className="mr-2 text-gray-400" />
-                <span className="text-xs text-gray-400 uppercase mr-1">Rep:</span> {job.salesRep}
+                <span className="text-xs text-gray-400 uppercase mr-1">Rep:</span> {job.salesRep || 'N/A'}
               </div>
             </div>
             
@@ -117,5 +180,3 @@ export default function Projects() {
     </Layout>
   );
 }
-
-

@@ -1,33 +1,30 @@
-# Zoho CRM Projects Sync Setup
+# Zoho CRM Data Synchronization Guide
 
-This guide explains how to configure Zoho CRM to push Deal updates to the Roof Worx Field App in real-time.
+This guide covers the **User-Scoped** synchronization architecture, ensuring users only see projects associated with them via the `Portal_Us_X_Job_Ticke` module.
 
-## Prerequisite
-- You must have the `ZOHO_WEBHOOK_SECRET` (e.g., `xK9m...`).
-- App URL: `https://your-app-url.vercel.app`.
+## 1. Architecture Overview
 
-## Step 1: Create Zoho Connection (If not exists)
+-   **Source of Truth:** Zoho CRM.
+-   **Performance Layer:** Upstash Redis (Cache).
+-   **Strategy:**
+    1.  **Global Data:** We fetch ALL Deals and store detailed JSON in a Redis Hash (`projects:data`).
+    2.  **User Access:** We fetch the `Portal_Us_X_Job_Ticke` junction module to map Users to Deals efficiently. This creates a list of allowed IDs for each user (`user:{email}:projects`).
 
-Reuse the `roofworx_app_conn` connection created for User Provisioning.
-If you haven't created it yet, see [ZOHO_AUTH_SETUP.md](ZOHO_AUTH_SETUP.md).
+---
 
-## Step 2: Create a Workflow Rule
+## 2. Real-Time Sync (Deals Webhook)
 
+When a Deal is created or edited, we push the changes to the app immediately.
+
+### A. Create Workflow Rule
 1.  Go to **Setup > Automation > Workflow Rules**.
 2.  Click **+ Create Rule**.
-3.  **Module**: `Deals`.
-4.  **Rule Name**: "Sync Deal to Field App".
-5.  **When**: 
-    -   **Create**: Check box.
-    -   **Edit**: Check box. Select "Any Field" or specific fields like "Stage", "Deal Name".
+3.  **Module:** `Deals`.
+4.  **Rule Name:** "Sync Deal to Field App".
+5.  **When:** Create OR Edit.
 
-## Step 3: Write the Deluge Script
-
-1.  Under **Actions**, click **Function**.
-2.  Select **Write your own**.
-3.  Name: `sync_deal_to_app`.
-4.  Click **Edit Arguments** and map `dealId` to the Deal ID.
-5.  Paste the following script:
+### B. Deluge Script (`sync_deal_to_app`)
+Associate this function with the workflow:
 
 ```javascript
 /* 
@@ -42,14 +39,16 @@ deal = zoho.crm.getRecordById("Deals", dealId);
 payload = Map();
 payload.put("id", deal.get("id"));
 payload.put("Deal_Name", deal.get("Deal_Name"));
+payload.put("Stage", deal.get("Stage"));
+
+// Custom Fields (Colors, Specs)
 payload.put("Supplier_Color", deal.get("Supplier_Color"));
 payload.put("Trim_Coil_Color", deal.get("Trim_Coil_Color"));
 payload.put("Shingle_Accessory_Color", deal.get("Shingle_Accessory_Color"));
 payload.put("Gutter_Types", deal.get("Gutter_Types"));
 payload.put("Siding_Style", deal.get("Siding_Style"));
-payload.put("Stage", deal.get("Stage"));
 
-// Handle Account Name (Lookup field)
+// Handle Account Name (Lookup)
 accountName = "";
 acc = deal.get("Account_Name");
 if (acc != null) {
@@ -57,21 +56,11 @@ if (acc != null) {
 }
 payload.put("Account_Name", accountName);
 
-// 3. Call Webhook using Connection
-url = "https://roofworx-time-entry-app.vercel.app//api/webhooks/projects";
+// 3. Call Webhook
+url = "https://roofworx-time-entry-app.vercel.app/api/webhooks/projects";
 
-// Add Header for Security
 headers = Map();
-// If using Connection with API Key type, this might be auto-injected.
-// If using Connection with "None" or manual handling:
-// headers.put("x-roofworx-secret", "YOUR_SECRET_KEY"); 
-
-// Note: Our App expects 'x-roofworx-secret'. 
-// If your connection injects 'Authorization', you might need to update the API route 
-// OR simply pass the secret in a custom header here manually.
-
-// RECOMMENDED: Pass manually for this specific webhook header
-headers.put("x-roofworx-secret", "xK9mPq2Lw5Nr8Yz4Jv3Ab7Dc6Ef1Gh0T"); 
+headers.put("x-roofworx-secret", "YOUR_WEBHOOK_SECRET"); // Match env ZOHO_WEBHOOK_SECRET
 
 response = invokeurl
 [
@@ -80,17 +69,59 @@ response = invokeurl
 	parameters: payload.toString()
     headers: headers
     content-type: "application/json"
-    // connection: "roofworx_app_conn" // Optional if you just want to whitelist the domain
 ];
 
 info response;
 ```
 
-6.  **Save** and **Associate**.
+---
 
-## Step 4: Verification
+## 3. Scheduled Sync (Reconciliation)
 
-1.  Create a Deal in Zoho.
-2.  Check the "Timeline" for success.
-3.  Check the Field App (refresh Redis if needed, or wait for cache to update).
+We need a periodic job to sync the **User Permissions** (the connection between Users and Deals). This processes the `Portal_Us_X_Job_Ticke` module.
 
+### A. Vercel Cron (Automatic)
+The app is configured to run this automatically every day at 00:00 UTC.
+-   Endpoint: `/api/cron/sync-projects`
+
+### B. Zoho Schedule (Manual/Frequent)
+If you want to control the schedule from Zoho (e.g., run every 2 hours):
+
+1.  Go to **Setup > Automation > Schedules**.
+2.  Click **Create Schedule**.
+3.  **Name:** `Trigger Field App Sync`.
+4.  **Frequency:** Daily / Hourly.
+5.  **Action:** Custom Function.
+
+### C. Deluge Script (`trigger_app_sync`)
+Paste this into the Schedule function:
+
+```javascript
+/*
+ * Function: trigger_app_sync
+ * Trigger: Scheduled
+ */
+
+// Your App URL
+url = "https://roofworx-time-entry-app.vercel.app/api/cron/sync-projects";
+
+// Call the Next.js API (GET Request)
+response = invokeurl
+[
+    url: url
+    type: GET
+];
+
+info "Sync Triggered: " + response;
+```
+
+---
+
+## 4. Verification
+
+1.  **Check Redis:**
+    -   Key `projects:data`: Should contain JSON for all deals.
+    -   Key `user:{email}:projects`: Should contain a set of Deal IDs.
+2.  **Check App:**
+    -   Log in as a user.
+    -   Ensure you only see projects connected to you in the `Portal_Us_X_Job_Ticke` module.
