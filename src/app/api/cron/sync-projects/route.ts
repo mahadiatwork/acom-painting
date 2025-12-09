@@ -101,7 +101,8 @@ export async function GET(request: Request) {
         await redis.del(userKey)
         
         if (dealIds && dealIds.size > 0) {
-            await redis.sadd(userKey, ...Array.from(dealIds))
+            const idsArray = Array.from(dealIds) as [string, ...string[]]
+            await redis.sadd(userKey, ...idsArray)
             updatedUsers++
         }
     }
