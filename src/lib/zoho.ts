@@ -31,6 +31,10 @@ class ZohoClient {
         }
 
         if (token) {
+          // Strip prefix if present (some Zoho functions return it with prefix)
+          if (typeof token === 'string' && token.startsWith('Zoho-oauthtoken ')) {
+            token = token.replace('Zoho-oauthtoken ', '');
+          }
           this.accessToken = token;
           this.tokenExpiry = Date.now() + 3500 * 1000;
           return this.accessToken;
