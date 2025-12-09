@@ -59,8 +59,14 @@ export async function GET(request: Request) {
       })
     }
 
+    // PERSIST MAP for Webhooks
+    if (userMap.size > 0) {
+      const mapObject = Object.fromEntries(userMap)
+      await redis.del('zoho:map:user_id_to_email')
+      await redis.hset('zoho:map:user_id_to_email', mapObject)
+    }
+
     // B. Fetch Junction Records (Portal_Us_X_Job_Ticke)
-    // This fetches ALL connections in one go (or paged)
     const connections = await zohoClient.getUserJobConnections()
     
     // C. Group Connections by User Email
