@@ -111,7 +111,7 @@ class ZohoClient {
       // Fetch from the new junction module: Portal_Us_X_Job_Ticke
       const response = await axios.get(`${this.apiDomain}/crm/v2/Portal_Us_X_Job_Ticke`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
-        params: { fields: 'Portal_User,Job_Ticket,Name' } 
+        params: { fields: 'Contractors,Projects,Name' } 
       });
       return response.data.data;
     } catch (error) {

@@ -75,9 +75,9 @@ export async function GET(request: Request) {
 
     if (connections && Array.isArray(connections)) {
       for (const conn of connections) {
-        // Looking for Lookup fields. API names assumed: Portal_User, Job_Ticket
-        const userId = conn.Portal_User?.id
-        const dealId = conn.Job_Ticket?.id
+        // Lookup field names from the Junction Module
+        const userId = conn.Contractors?.id
+        const dealId = conn.Projects?.id
         
         if (userId && dealId) {
           const email = userMap.get(userId)
