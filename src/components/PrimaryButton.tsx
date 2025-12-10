@@ -17,10 +17,10 @@ export function PrimaryButton({
   variant = "primary",
   ...props 
 }: PrimaryButtonProps) {
-  const baseStyles = "h-12 text-base font-semibold transition-all active:scale-95 touch-manipulation";
+  const baseStyles = "h-12 text-base font-semibold transition-all active:scale-95 touch-manipulation cursor-pointer";
   
   const variantStyles = {
-    primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md",
+    primary: "bg-primary text-primary-foreground hover:bg-primary/85 shadow-md hover:shadow-lg",
     secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/90",
     outline: "border-2 border-primary text-primary hover:bg-primary/10 bg-transparent",
     ghost: "hover:bg-accent hover:text-accent-foreground",

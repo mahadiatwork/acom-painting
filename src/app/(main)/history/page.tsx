@@ -3,11 +3,20 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
-import { timeEntries } from "@/data/mockData";
-import { CalendarDays, Clock, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { useTimeEntries } from "@/hooks/useTimeEntries";
+import { CalendarDays, Clock, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 
 export default function History() {
   const router = useRouter();
+  const { data: rawEntries, isLoading, isError } = useTimeEntries({ days: 30 });
+  
+  // Ensure it is always an array before the UI touches it
+  const entries = Array.isArray(rawEntries) ? rawEntries : [];
+  
+  // Debug Log in Render
+  console.log('[History Render] Raw entries:', rawEntries);
+  console.log('[History Render] Entries available:', entries.length);
+  console.log('[History Render] Is loading:', isLoading);
 
   return (
     <Layout>
@@ -18,11 +27,26 @@ export default function History() {
         <h1 className="text-xl font-bold tracking-wide text-white">Time History</h1>
       </div>
 
-      <main className="flex-1 p-4 space-y-4 overflow-y-auto pb-24">
-        <p className="text-sm text-gray-500 italic mb-2">Showing last 7 days. Edits must be made in CRM.</p>
+      <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-4 overflow-y-auto pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+        <p className="text-sm text-gray-500 italic mb-2">Showing last 30 days. Edits must be made in CRM.</p>
         
-        {timeEntries.map((entry) => (
-          <div key={entry.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
+        {isLoading ? (
+          <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
+            <p className="text-gray-500">Loading entries...</p>
+          </div>
+        ) : isError ? (
+          <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+            <p className="text-red-500">Failed to load entries. Please try again.</p>
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+            <p className="text-gray-500">No entries found. Create your first time entry!</p>
+          </div>
+        ) : (
+          <div className="space-y-4 pb-4">
+            {entries.map((entry, index) => (
+            <div key={entry.id} className={`bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden ${index === entries.length - 1 ? 'mb-4' : ''}`}>
             <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
             
             <div className="flex justify-between items-start mb-2">
@@ -30,6 +54,11 @@ export default function History() {
               {entry.synced && (
                 <div className="flex items-center text-green-600 text-xs font-bold bg-green-50 px-2 py-1 rounded-full border border-green-100">
                   <CheckCircle2 size={12} className="mr-1" /> SYNCED
+                </div>
+              )}
+              {!entry.synced && (
+                <div className="flex items-center text-orange-600 text-xs font-bold bg-orange-50 px-2 py-1 rounded-full border border-orange-100">
+                  PENDING
                 </div>
               )}
             </div>
@@ -55,8 +84,16 @@ export default function History() {
                <div>Start: <span className="font-mono text-gray-900">{entry.startTime}</span></div>
                <div>End: <span className="font-mono text-gray-900">{entry.endTime}</span></div>
             </div>
+            {entry.notes && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-400 uppercase font-semibold mb-1">Notes</div>
+                <div className="text-sm text-gray-700">{entry.notes}</div>
+              </div>
+            )}
+            </div>
+            ))}
           </div>
-        ))}
+        )}
       </main>
     </Layout>
   );

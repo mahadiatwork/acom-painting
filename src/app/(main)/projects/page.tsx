@@ -8,7 +8,7 @@ import { useProjects } from "@/hooks/useProjects";
 
 export default function Projects() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const { data: projects, isLoading, error } = useProjects();
+  const { data: projects = [], isLoading, error } = useProjects();
   
   const selectedJob = projects?.find(j => j.id === selectedJobId);
 
@@ -23,12 +23,15 @@ export default function Projects() {
     );
   }
 
-  if (error) {
+  // Show "no projects" if empty (after loading is done)
+  if (!isLoading && (!projects || projects.length === 0)) {
     return (
       <Layout>
-         <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] p-4 text-center">
-          <p className="text-red-500 mb-2">Failed to load projects</p>
-          <button onClick={() => window.location.reload()} className="text-primary underline">Retry</button>
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] p-4 text-center">
+          <Info className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 mb-2">No projects found</p>
+          <p className="text-gray-500 text-sm mb-4">Projects will appear here once they&apos;re assigned to you in Zoho CRM.</p>
+          <button onClick={() => window.location.reload()} className="text-primary underline text-sm">Refresh</button>
         </div>
       </Layout>
     )
@@ -46,7 +49,7 @@ export default function Projects() {
           </h1>
         </div>
 
-        <main className="flex-1 p-4 pb-24 space-y-6">
+        <main className="flex-1 p-4 md:p-6 xl:p-4 pb-24 space-y-6 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-800 mb-1">Project Details</h2>
@@ -136,7 +139,7 @@ export default function Projects() {
         <h1 className="text-xl font-bold tracking-wide">Projects</h1>
       </div>
       
-      <main className="flex-1 p-4 space-y-3 pb-24">
+      <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-3 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
         {projects?.length === 0 && (
             <div className="text-center p-8 text-gray-500">
                 <Briefcase size={48} className="mx-auto mb-4 opacity-20" />

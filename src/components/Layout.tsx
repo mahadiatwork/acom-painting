@@ -12,7 +12,7 @@ export function Layout({ children, className }: { children: React.ReactNode; cla
 
   return (
     <div className="min-h-screen bg-muted flex justify-center">
-      <div className={cn("w-full max-w-md bg-background min-h-screen shadow-xl flex flex-col relative", className)}>
+      <div className={cn("w-full max-w-md md:max-w-none xl:max-w-md bg-background min-h-screen md:shadow-none xl:shadow-xl flex flex-col relative", className)}>
         {children}
         {showBottomNav && <BottomNav />}
       </div>

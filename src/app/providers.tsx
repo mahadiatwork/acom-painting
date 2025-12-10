@@ -6,19 +6,23 @@ import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        refetchInterval: false,
-        refetchOnWindowFocus: false,
-        staleTime: Infinity,
-        retry: false,
-      },
-      mutations: {
-        retry: false,
-      },
-    },
-  }))
+  // Create QueryClient instance once per app lifecycle
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: true,
+            staleTime: 60 * 1000, // 1 minute default
+            gcTime: 5 * 60 * 1000, // 5 minutes cache time
+            retry: 1,
+          },
+          mutations: {
+            retry: 1,
+          },
+        },
+      })
+  )
 
   return (
     <QueryClientProvider client={queryClient}>

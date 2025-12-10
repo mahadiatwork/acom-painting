@@ -85,7 +85,7 @@ export default function Profile() {
         <h1 className="text-xl font-bold tracking-wide">My Profile</h1>
       </div>
       
-      <main className="flex-1 p-4 pb-24">
+      <main className="flex-1 p-4 md:p-6 xl:p-4 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
           <div className="h-24 bg-primary/20 relative">
              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-secondary rounded-full border-4 border-white flex items-center justify-center text-white">

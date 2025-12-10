@@ -5,19 +5,17 @@ import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField, TextAreaField } from "@/components/FormFields";
-import { ArrowLeft, HardHat, Check, ChevronRight, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Calendar, Clock } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useProjects } from "@/hooks/useProjects";
 import { createClient } from "@/lib/supabase/client";
-
-const STEPS = ["Job & Safety", "Time & Details", "Review"];
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function NewEntry() {
   const router = useRouter();
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Data Fetching
@@ -25,38 +23,34 @@ export default function NewEntry() {
 
   // Form State
   const [jobId, setJobId] = useState("");
-  const [safetyChecks, setSafetyChecks] = useState({
-    ppe: false,
-    ladder: false,
-    hazards: false
+  const [date, setDate] = useState(() => {
+    // Default to today's date in YYYY-MM-DD format
+    return new Date().toISOString().split('T')[0];
   });
-  
-  const [timeData, setTimeData] = useState({
-    startTime: "",
-    lunchStart: "",
-    lunchEnd: "",
-    endTime: "",
-  });
-  
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [hasChangeOrder, setHasChangeOrder] = useState(false);
-  const [changeOrderDetails, setChangeOrderDetails] = useState("");
-
-  const handleNext = () => {
-    setStep(s => Math.min(s + 1, 3));
-    window.scrollTo(0, 0);
-  };
-
-  const handleBack = () => {
-    if (step === 1) {
-      router.push("/");
-    } else {
-      setStep(s => s - 1);
-      window.scrollTo(0, 0);
-    }
-  };
 
   const handleSubmit = async () => {
+    // Validation
+    if (!jobId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a job",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!startTime || !endTime) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter start and end times",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -67,31 +61,29 @@ export default function NewEntry() {
         throw new Error("User not authenticated");
       }
 
-      const submissionData = {
-        jobId,
-        jobName: projects?.find(j => j.id.toString() === jobId)?.name,
-        safetyChecks,
-        ...timeData,
-        notes,
-        changeOrder: hasChangeOrder ? changeOrderDetails : null,
-        status: "pending",
-        userId: user.id,
-        totalHours: 0,
-      };
-
+      // Calculate total hours
       const parseTime = (value: string) => {
         if (!value) return 0;
         const [h, m] = value.split(":").map(Number);
         return h * 60 + m;
       };
 
-      const totalMinutes = parseTime(timeData.endTime) - parseTime(timeData.startTime);
-      const lunchMinutes = (timeData.lunchStart && timeData.lunchEnd) 
-        ? parseTime(timeData.lunchEnd) - parseTime(timeData.lunchStart) 
-        : 0;
-      
-      const netMinutes = totalMinutes - lunchMinutes;
-      submissionData.totalHours = netMinutes > 0 ? Number((netMinutes / 60).toFixed(2)) : 0;
+      const totalMinutes = parseTime(endTime) - parseTime(startTime);
+      const totalHours = totalMinutes > 0 ? Number((totalMinutes / 60).toFixed(2)) : 0;
+
+      const submissionData = {
+        jobId,
+        jobName: projects?.find(j => j.id.toString() === jobId)?.name || "",
+        date,
+        startTime,
+        endTime,
+        lunchStart: "",
+        lunchEnd: "",
+        totalHours,
+        notes: notes || "",
+        changeOrder: "",
+        userId: user.id,
+      };
 
       const response = await fetch("/api/time-entries", {
         method: "POST",
@@ -100,18 +92,34 @@ export default function NewEntry() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save entry");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save entry");
       }
+
+      // Invalidate React Query cache to trigger refetch
+      // refetchType: 'active' ensures active queries refetch immediately
+      queryClient.invalidateQueries({ 
+        queryKey: ['time-entries'],
+        refetchType: 'active' // Refetch active queries immediately
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['weeklyHours'],
+        refetchType: 'active'
+      });
 
       toast({
         title: "Entry Submitted",
-        description: "Your time entry was saved. We'll keep it in Supabase.",
+        description: "Your time entry has been saved successfully.",
         duration: 3000,
       });
 
-      setTimeout(() => {
-        router.push("/");
-      }, 500);
+      // Navigate immediately - the dashboard will refetch due to:
+      // 1. refetchOnMount: true in useTimeEntries hook
+      // 2. Cache invalidation above
+      router.push("/");
+      
+      // Force a router refresh to ensure fresh data is loaded
+      router.refresh();
     } catch (error) {
       console.error("Failed to submit entry:", error);
       toast({
@@ -123,39 +131,31 @@ export default function NewEntry() {
     }
   };
 
-  const isStep1Valid = jobId && Object.values(safetyChecks).every(v => v);
-  const isStep2Valid = timeData.startTime && timeData.endTime; // Simplified validation
+  const isFormValid = jobId && startTime && endTime;
 
   return (
     <Layout>
       {/* Header */}
       <div className="bg-secondary text-white p-4 flex items-center sticky top-0 z-20 shadow-md">
-        <button onClick={handleBack} className="mr-4 text-gray-300 hover:text-white p-1">
+        <button 
+          onClick={() => router.push("/")} 
+          className="mr-4 text-gray-300 hover:text-white p-1"
+        >
           <ArrowLeft size={24} />
         </button>
-        <div>
-          <h1 className="text-lg font-bold">New Time Entry</h1>
-          <div className="flex gap-1 mt-1">
-            {STEPS.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`h-1 w-8 rounded-full ${step > idx ? 'bg-primary' : 'bg-gray-600'}`}
-              />
-            ))}
-          </div>
-        </div>
+        <h1 className="text-lg font-bold">New Time Entry</h1>
       </div>
 
-      <main className="flex-1 p-4 pb-24">
-        {step === 1 && (
-          <div className="space-y-8 animate-in slide-in-from-right duration-300">
-            <section>
-              <h2 className="text-xl font-heading font-bold text-secondary mb-4 flex items-center">
-                <span className="bg-secondary text-white w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">1</span>
-                Select Job
-              </h2>
-              <div className="space-y-2">
-                <Label className="text-gray-500 font-semibold">Active Job</Label>
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-4 md:p-6 xl:p-4 space-y-6 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+          {/* Job Details Section */}
+          <section>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">Job Details</h2>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="job" className="text-gray-700 font-semibold mb-2 block">
+                  Job <span className="text-red-500">*</span>
+                </Label>
                 {isLoadingProjects ? (
                   <div className="flex items-center space-x-2 p-3 border rounded-md bg-gray-50 text-gray-500">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -163,195 +163,166 @@ export default function NewEntry() {
                   </div>
                 ) : (
                   <select 
+                    id="job"
                     className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
                     value={jobId}
                     onChange={(e) => setJobId(e.target.value)}
                   >
-                    <option value="" disabled>Select a job...</option>
+                    <option value="" disabled>Select a job</option>
                     {projects?.map(job => (
                       <option key={job.id} value={job.id}>{job.name}</option>
                     ))}
                   </select>
                 )}
               </div>
-            </section>
 
-            <section className="bg-orange-50 p-5 rounded-xl border border-orange-100">
-              <h2 className="text-lg font-heading font-bold text-orange-800 mb-4 flex items-center">
-                <HardHat className="mr-2" size={20} />
-                Safety Checklist
-              </h2>
-              <div className="space-y-4">
-                {[
-                  { id: 'ppe', label: 'PPE Checked & Worn' },
-                  { id: 'ladder', label: 'Ladder Secured / Scaffolding Safe' },
-                  { id: 'hazards', label: 'Site Hazards Assessed' }
-                ].map(check => (
-                  <label key={check.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-orange-100 shadow-sm active:scale-[0.99] transition-transform">
-                    <input 
-                      type="checkbox" 
-                      className="w-6 h-6 text-primary border-gray-300 rounded focus:ring-primary"
-                      checked={safetyChecks[check.id as keyof typeof safetyChecks]}
-                      onChange={(e) => setSafetyChecks(prev => ({ ...prev, [check.id]: e.target.checked }))}
-                    />
-                    <span className="text-gray-700 font-medium">{check.label}</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-300">
-            <section>
-              <h2 className="text-xl font-heading font-bold text-secondary mb-4 flex items-center">
-                <span className="bg-secondary text-white w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">2</span>
-                Time & Details
-              </h2>
-              
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <InputField 
-                  label="Start Time" 
-                  type="time" 
-                  id="start-time"
-                  value={timeData.startTime}
-                  onChange={(e) => setTimeData(prev => ({ ...prev, startTime: e.target.value }))}
-                />
-                <InputField 
-                  label="End Time" 
-                  type="time" 
-                  id="end-time"
-                  value={timeData.endTime}
-                  onChange={(e) => setTimeData(prev => ({ ...prev, endTime: e.target.value }))}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <InputField 
-                  label="Lunch Start" 
-                  type="time" 
-                  id="lunch-start"
-                  value={timeData.lunchStart}
-                  onChange={(e) => setTimeData(prev => ({ ...prev, lunchStart: e.target.value }))}
-                />
-                <InputField 
-                  label="Lunch End" 
-                  type="time" 
-                  id="lunch-end"
-                  value={timeData.lunchEnd}
-                  onChange={(e) => setTimeData(prev => ({ ...prev, lunchEnd: e.target.value }))}
-                />
-              </div>
-
-              <TextAreaField 
-                label="Daily Notes" 
-                placeholder="What was accomplished today?"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </section>
-
-            <section className="border-t pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <Label htmlFor="change-order" className="text-base font-bold text-gray-800">
-                  Add Change Order / Extra Items?
+              <div>
+                <Label htmlFor="date" className="text-gray-700 font-semibold mb-2 block">
+                  Date <span className="text-red-500">*</span>
                 </Label>
-                <Switch 
-                  id="change-order" 
-                  checked={hasChangeOrder}
-                  onCheckedChange={setHasChangeOrder}
+                <div className="relative">
+                  <input
+                    id="date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('date') as HTMLInputElement;
+                      if (input?.showPicker) {
+                        input.showPicker();
+                      } else {
+                        input?.focus();
+                        input?.click();
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                  >
+                    <Calendar size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Time Details Section */}
+          <section>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">Time Details</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-time" className="text-gray-700 font-semibold mb-2 block">
+                  Start Time <span className="text-red-500">*</span>
+                </Label>
+                <div className="relative">
+                  <input
+                    id="start-time"
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('start-time') as HTMLInputElement;
+                      if (input?.showPicker) {
+                        input.showPicker();
+                      } else {
+                        input?.focus();
+                        input?.click();
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
+                  >
+                    <Clock size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="end-time" className="text-gray-700 font-semibold mb-2 block">
+                  End Time <span className="text-red-500">*</span>
+                </Label>
+                <div className="relative">
+                  <input
+                    id="end-time"
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('end-time') as HTMLInputElement;
+                      if (input?.showPicker) {
+                        input.showPicker();
+                      } else {
+                        input?.focus();
+                        input?.click();
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
+                  >
+                    <Clock size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Additional Information Section */}
+          <section>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">Additional Information</h2>
+            <div className="space-y-4">
+              <div>
+                <TextAreaField
+                  id="notes"
+                  label="Notes"
+                  placeholder="Add any notes about the work performed..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  className="w-full"
                 />
               </div>
-              
-              {hasChangeOrder && (
-                <div className="animate-in slide-in-from-top fade-in duration-200">
-                   <TextAreaField 
-                    label="Materials & Labor Details" 
-                    placeholder="Describe extra materials used and labor time..."
-                    className="bg-yellow-50 border-yellow-200 focus:border-yellow-400 focus:ring-yellow-400"
-                    value={changeOrderDetails}
-                    onChange={(e) => setChangeOrderDetails(e.target.value)}
-                  />
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+            </div>
+          </section>
 
-        {step === 3 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-300">
-             <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center">
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Check size={32} />
-                </div>
-                <h2 className="text-2xl font-heading font-bold text-gray-800 mb-2">Ready to Submit?</h2>
-                <p className="text-gray-500 mb-6">Please review your entry before sending to the office.</p>
-                
-                <div className="text-left bg-gray-50 p-4 rounded-lg space-y-3 text-sm">
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-gray-500">Job</span>
-                    <span className="font-bold text-gray-800 text-right w-1/2 truncate">
-                      {projects?.find(j => j.id.toString() === jobId)?.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-gray-500">Shift</span>
-                    <span className="font-bold text-gray-800">{timeData.startTime} - {timeData.endTime}</span>
-                  </div>
-                   <div className="flex justify-between border-b pb-2">
-                    <span className="text-gray-500">Lunch</span>
-                    <span className="font-bold text-gray-800">{timeData.lunchStart} - {timeData.lunchEnd}</span>
-                  </div>
-                  {hasChangeOrder && (
-                    <div className="flex justify-between text-orange-600 font-medium">
-                      <span>Change Order</span>
-                      <span>Yes</span>
-                    </div>
-                  )}
-                </div>
-             </section>
-          </div>
-        )}
-      </main>
-
-      {/* Footer Actions */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 flex justify-center z-40">
-        <div className="w-full max-w-md flex gap-3">
-          {step < 3 ? (
-             <div className="w-full">
-               <PrimaryButton 
-                 onClick={handleNext} 
-                 disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
-                 className="w-full text-lg shadow-lg"
-               >
-                 Next Step <ChevronRight className="ml-2" />
-               </PrimaryButton>
-               
-               {step === 1 && !isStep1Valid && (
-                 <p className="text-center text-xs text-orange-600 mt-2 font-medium animate-pulse">
-                   * Select a job & check all safety boxes to proceed
-                 </p>
-               )}
-               
-               {step === 2 && !isStep2Valid && (
-                 <p className="text-center text-xs text-orange-600 mt-2 font-medium animate-pulse">
-                   * Enter start and end times to proceed
-                 </p>
-               )}
-             </div>
-          ) : (
-             <PrimaryButton 
-               onClick={handleSubmit}
-               disabled={isSubmitting}
-               className="w-full text-lg shadow-lg bg-green-600 hover:bg-green-700"
-             >
-               {isSubmitting ? "Sending..." : "Submit to Office"}
-               {!isSubmitting && <Save className="ml-2" size={20} />}
-             </PrimaryButton>
-          )}
+          {/* Action Buttons - Inside scrollable content */}
+          <section className="pt-4 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => router.push("/")}
+                disabled={isSubmitting}
+                className="flex-1 h-12 px-4 rounded-md border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <PrimaryButton
+                onClick={handleSubmit}
+                disabled={!isFormValid || isSubmitting}
+                className="flex-1 text-lg shadow-md cursor-pointer hover:shadow-lg hover:bg-primary/85 transition-all"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2" size={20} />
+                    Submit Entry
+                  </>
+                )}
+              </PrimaryButton>
+            </div>
+          </section>
         </div>
-      </div>
+      </main>
     </Layout>
   );
 }
