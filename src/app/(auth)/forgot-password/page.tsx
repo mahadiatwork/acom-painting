@@ -33,18 +33,18 @@ export default function ForgotPassword() {
             <ArrowLeft size={24} />
           </Link>
           <div className="inline-flex items-center justify-center mb-6">
-            <Image 
-              src="/assets/image_1764793317196.png" 
-              alt="Roof Worx Logo" 
-              width={96} 
-              height={96} 
-              className="h-24 w-auto invert brightness-0 filter" 
+            <Image
+              src="/assets/acomLogo.png"
+              alt="ACOM Painting Logo"
+              width={160}
+              height={96}
+              className="h-24 w-auto"
             />
           </div>
           <div className="h-1 w-12 bg-primary rounded-full mb-2"></div>
           <p className="text-gray-400 text-xs font-medium tracking-widest uppercase">Account Recovery</p>
         </div>
-        
+
         <div className="flex-1 p-8 pt-10 bg-white">
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Forgot Password?</h2>
@@ -55,10 +55,10 @@ export default function ForgotPassword() {
 
           {!submitted ? (
             <form onSubmit={handleSubmit} className="space-y-6">
-              <InputField 
-                label="Email or Username" 
-                id="identifier" 
-                type="text" 
+              <InputField
+                label="Email or Username"
+                id="identifier"
+                type="text"
                 placeholder="Username or email address"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}

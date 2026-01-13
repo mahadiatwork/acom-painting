@@ -16,12 +16,12 @@ export default function Dashboard() {
   const { data: rawRecentEntries, isLoading: isLoadingEntries, isError: isEntriesError } = useRecentEntries(2);
   // Ensure it is always an array before the UI touches it
   const recentEntries = Array.isArray(rawRecentEntries) ? rawRecentEntries : [];
-  
+
   // Debug Log in Render
   console.log('[Dashboard Render] Raw entries:', rawRecentEntries);
   console.log('[Dashboard Render] Entries available:', recentEntries.length);
   console.log('[Dashboard Render] Is loading:', isLoadingEntries);
-  
+
   const { data: weeklyHours = 0, isLoading: isLoadingHours, isError: isHoursError } = useWeeklyHours();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export default function Dashboard() {
   const handleLogout = async () => {
     const supabase = createClient();
     const { error } = await supabase.auth.signOut();
-    
+
     if (!error) {
       // Clear local state
       setUser(null);
@@ -80,7 +80,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <Header user={loading ? "..." : userName} onLogout={handleLogout} />
-      
+
       <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-6 overflow-y-auto pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
         {/* Main Action */}
         <section>
@@ -115,7 +115,7 @@ export default function Dashboard() {
               View All <ChevronRight size={16} />
             </Link>
           </div>
-          
+
           <div className="space-y-3">
             {isLoadingEntries ? (
               // Skeleton loader - show for max 3 seconds
@@ -136,7 +136,7 @@ export default function Dashboard() {
               </div>
             ) : (
               recentEntries.map((entry) => (
-                <div key={entry.id} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex justify-between items-center">
+                <div key={entry.id} className="bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center">
                   <div>
                     <h4 className="font-bold text-gray-800 line-clamp-1">{entry.jobName}</h4>
                     <div className="flex items-center text-gray-500 text-xs mt-1 gap-2">
@@ -145,8 +145,8 @@ export default function Dashboard() {
                       <span className="font-mono">{entry.totalHours} hrs</span>
                     </div>
                   </div>
-                  <div className="text-green-600">
-                    {entry.synced && <div className="bg-green-100 p-1 rounded-full"><History size={16} /></div>}
+                  <div className="text-primary">
+                    {entry.synced && <div className="bg-primary/10 p-1 rounded-full"><History size={16} /></div>}
                   </div>
                 </div>
               ))

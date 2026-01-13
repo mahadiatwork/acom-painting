@@ -27,16 +27,16 @@ export function Header({ title, user, onLogout }: { title?: string, user?: strin
         <h1 className="text-xl font-bold tracking-wide text-white">{title}</h1>
       ) : (
         <div className="flex items-center">
-          <Image 
-            src="/assets/image_1764793317196.png" 
-            alt="Roof Worx" 
-            width={32} 
-            height={32} 
-            className="h-8 w-auto invert brightness-0 filter" 
+          <Image
+            src="/assets/acomLogo.png"
+            alt="ACOM Painting"
+            width={48}
+            height={32}
+            className="h-8 w-auto"
           />
         </div>
       )}
-      
+
       {user && (
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-gray-300">{user}</span>

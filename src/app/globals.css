@@ -50,13 +50,13 @@
 }
 
 :root {
-  /* Roof Worx Palette */
-  /* Primary Brand: #C2A88D -> HSL(31, 33%, 66%) */
-  --primary: 31 33% 66%;
+  /* ACOM Painting Teal Palette */
+  /* Primary Brand: Teal #0D9488 -> HSL(175, 84%, 32%) */
+  --primary: 175 84% 32%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary (Headers/Dark): #2D2D2D -> HSL(0, 0%, 18%) */
-  --secondary: 0 0% 18%;
+  /* Secondary (Headers/Dark): #2D3436 -> HSL(180, 6%, 19%) */
+  --secondary: 180 6% 19%;
   --secondary-foreground: 0 0% 100%;
 
   /* Backgrounds */
@@ -72,20 +72,20 @@
   --muted: 210 40% 96%; /* Light Gray */
   --muted-foreground: 215 16% 47%;
 
-  --accent: 31 33% 95%; /* Very light version of primary */
-  --accent-foreground: 0 0% 18%;
+  --accent: 175 50% 95%; /* Very light teal */
+  --accent-foreground: 175 84% 25%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 31 33% 66%;
+  --ring: 175 84% 32%;
 
   --radius: 0.5rem;
 
-  /* Charts - standard placeholders */
-  --chart-1: 12 76% 61%;
+  /* Charts - teal inspired */
+  --chart-1: 175 84% 32%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;

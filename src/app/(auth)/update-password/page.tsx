@@ -18,7 +18,7 @@ export default function UpdatePassword() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast({
         title: "Error",
@@ -73,12 +73,12 @@ export default function UpdatePassword() {
       <div className="flex flex-col min-h-screen">
         <div className="bg-secondary py-12 px-8 flex flex-col items-center justify-center">
           <div className="inline-flex items-center justify-center mb-6">
-            <Image 
-              src="/assets/image_1764793317196.png" 
-              alt="Roof Worx Logo" 
-              width={96} 
-              height={96} 
-              className="h-24 w-auto invert brightness-0 filter" 
+            <Image
+              src="/assets/acomLogo.png"
+              alt="ACOM Painting Logo"
+              width={160}
+              height={96}
+              className="h-24 w-auto"
             />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Update Password</h2>
@@ -86,24 +86,24 @@ export default function UpdatePassword() {
             For your security, please set a new password before continuing.
           </p>
         </div>
-        
+
         <div className="flex-1 p-8 pt-10 bg-white">
           <form onSubmit={handleUpdate} className="space-y-6">
-            <InputField 
-              label="New Password" 
-              id="new-password" 
-              type="password" 
+            <InputField
+              label="New Password"
+              id="new-password"
+              type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               className="bg-gray-50 border-gray-200 focus:bg-white"
             />
-            
-            <InputField 
-              label="Confirm Password" 
-              id="confirm-password" 
-              type="password" 
+
+            <InputField
+              label="Confirm Password"
+              id="confirm-password"
+              type="password"
               placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
