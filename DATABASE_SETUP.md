@@ -48,3 +48,6 @@ Supabase provides **two different connection strings** for different purposes:
 ✅ **Connection Working:** Your app can now connect to Supabase!
 ❌ **Tables Missing:** Run `pnpm run db:push` after setting `DATABASE_URL_DIRECT`
 
+
+test
+
