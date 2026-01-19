@@ -611,7 +611,7 @@ export async function POST(request: NextRequest) {
 
 1. **Submit Test Entry:**
    ```bash
-   curl -X POST https://your-app.vercel.app/api/time-entries \
+   curl -X POST https://acom-painting.vercel.app/api/time-entries \
      -H "Content-Type: application/json" \
      -H "Cookie: your-session-cookie" \
      -d '{"jobId":"test","jobName":"Test","userId":"test-user",...}'
@@ -627,7 +627,7 @@ export async function POST(request: NextRequest) {
 
 4. **Fetch Entries:**
    ```bash
-   curl https://your-app.vercel.app/api/time-entries \
+   curl https://acom-painting.vercel.app/api/time-entries \
      -H "Cookie: your-session-cookie"
    ```
    - Should return the test entry

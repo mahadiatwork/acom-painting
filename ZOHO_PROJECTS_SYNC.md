@@ -12,7 +12,7 @@ This guide covers setting up **3 Webhooks** to ensure instant synchronization of
     ```javascript
     // ... (Get Deal details as before) ...
     
-    url = "https://roofworx-time-entry-app.vercel.app/api/webhooks/projects";
+    url = "https://acom-painting.vercel.app/api/webhooks/projects";
     // ... (Send POST with JSON) ...
     ```
     *(See previous guides for full script)*
@@ -46,7 +46,7 @@ This guide covers setting up **3 Webhooks** to ensure instant synchronization of
         payload.put("dealId", deal.get("id"));
         payload.put("action", "add");
         
-        url = "https://roofworx-time-entry-app.vercel.app/api/webhooks/assignments";
+        url = "https://acom-painting.vercel.app/api/webhooks/assignments";
         
         headers = Map();
         headers.put("x-roofworx-secret", "YOUR_WEBHOOK_SECRET");
@@ -86,7 +86,7 @@ This guide covers setting up **3 Webhooks** to ensure instant synchronization of
     payload.put("id", userRec.get("id"));
     payload.put("Email", userRec.get("Email"));
     
-    url = "https://roofworx-time-entry-app.vercel.app/api/webhooks/users";
+    url = "https://acom-painting.vercel.app/api/webhooks/users";
     
     headers = Map();
     headers.put("x-roofworx-secret", "YOUR_WEBHOOK_SECRET");
