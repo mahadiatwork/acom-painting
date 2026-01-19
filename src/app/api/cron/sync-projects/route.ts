@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { redis } from '@/lib/redis'
 import { zohoClient } from '@/lib/zoho'
 import { db } from '@/lib/db'
 import { projects, userProjects, users } from '@/lib/schema'
@@ -69,21 +68,8 @@ export async function GET(request: Request) {
       }
     } catch (dbError: any) {
       console.error('[Cron] Postgres projects sync failed:', dbError?.message || dbError)
-      // Continue to Redis update even if Postgres fails
+      throw dbError
     }
-
-    // 2. Store in Redis Hash: projects:data
-    const projectHash: Record<string, string> = {}
-    projectsData.forEach(p => {
-      projectHash[p.id] = JSON.stringify(p)
-    })
-
-    // Reset and Populate Hash
-    await redis.del('projects:data')
-    if (Object.keys(projectHash).length > 0) {
-      await redis.hset('projects:data', projectHash)
-    }
-    console.log(`[Cron] Synced ${projectsData.length} projects to Redis Hash`)
 
     // ---------------------------------------------------------
     // STEP 2: Sync User Access (Optimized via Junction Module)
@@ -121,25 +107,6 @@ export async function GET(request: Request) {
     } catch (dbError: any) {
       console.error('[Cron] Postgres users sync failed:', dbError?.message || dbError)
       // Continue even if Postgres fails
-    }
-
-    // PERSIST MAP for Webhooks (Redis)
-    if (userMap.size > 0) {
-      const mapObject = Object.fromEntries(userMap)
-      await redis.del('zoho:map:user_id_to_email')
-      await redis.hset('zoho:map:user_id_to_email', mapObject)
-    }
-
-    // Store reverse map: email -> portal_user_id (for fast Contractor lookup in time entries)
-    const emailToUserIdMap: Record<string, string> = {}
-    for (const [userId, email] of userMap.entries()) {
-      emailToUserIdMap[email] = userId
-    }
-    
-    if (Object.keys(emailToUserIdMap).length > 0) {
-      await redis.del('zoho:map:email_to_user_id')
-      await redis.hset('zoho:map:email_to_user_id', emailToUserIdMap)
-      console.log(`[Cron] Stored ${Object.keys(emailToUserIdMap).length} email->user_id mappings in Redis`)
     }
 
     // B. Fetch Junction Records (Portal_Us_X_Job_Ticke)
@@ -218,30 +185,13 @@ export async function GET(request: Request) {
     } catch (dbError: any) {
       console.error('[Cron] Postgres user_projects sync failed:', dbError?.message || dbError)
       console.error('[Cron] Full error:', dbError)
-      // Continue to Redis update even if Postgres fails
-    }
-
-    // E. Update Redis for ALL users (to ensure we clear revoked access)
-    let updatedUsers = 0
-    
-    for (const [userId, email] of userMap.entries()) {
-        const dealIds = userProjectsMap.get(email)
-        const userKey = `user:${email}:projects`
-        
-        // Always clear old key first
-        await redis.del(userKey)
-        
-        if (dealIds && dealIds.size > 0) {
-            const idsArray = Array.from(dealIds) as [string, ...string[]]
-            await redis.sadd(userKey, ...idsArray)
-            updatedUsers++
-        }
+      // Continue even if Postgres fails
     }
 
     return NextResponse.json({ 
       success: true, 
       projectsCount: projectsData.length,
-      usersSynced: updatedUsers,
+      usersSynced: userMap.size,
       connectionsProcessed: connectionCount,
       postgresConnectionsSynced: postgresConnectionsSynced,
       timestamp: new Date().toISOString(),

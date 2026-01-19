@@ -1,6 +1,3 @@
 {
-  "/api/time-entries/route": "app/api/time-entries/route.js",
-  "/(main)/page": "app/(main)/page.js",
-  "/(main)/entry/new/page": "app/(main)/entry/new/page.js",
-  "/(main)/history/page": "app/(main)/history/page.js"
+  "/(auth)/login/page": "app/(auth)/login/page.js"
 }

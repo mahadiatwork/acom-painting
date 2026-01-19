@@ -56,7 +56,7 @@ export default function Login() {
   return (
     <Layout className="bg-white">
       <div className="flex flex-col min-h-screen">
-        <div className="bg-secondary py-20 px-8 flex flex-col items-center justify-center">
+        <div className="bg-white py-20 px-8 flex flex-col items-center justify-center">
           <div className="inline-flex items-center justify-center mb-6">
             <Image
               src="/assets/acomLogo.png"

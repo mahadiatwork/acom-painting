@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,6 +27,7 @@ export const timeEntries = pgTable("time_entries", {
   totalHours: text("total_hours").notNull(),
   notes: text("notes").default(""),
   changeOrder: text("change_order").default(""),
+  synced: boolean("synced").default(false).notNull(),
   createdAt: text("created_at").default(sql`now()`),
 }, (table) => ({
   userIdIdx: index("user_id_idx").on(table.userId),

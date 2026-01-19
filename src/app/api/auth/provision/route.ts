@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { db } from '@/lib/db'
 import { users } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
-import { redis } from '@/lib/redis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,16 +64,6 @@ export async function POST(request: NextRequest) {
     } catch (dbError: any) {
       console.error('[Provision] Postgres write failed:', dbError?.message || dbError)
       // Continue even if Postgres fails - Supabase Auth user is created
-    }
-
-    // 4. Update Redis mappings
-    try {
-      await redis.hset('zoho:map:user_id_to_email', { [String(zohoId)]: email })
-      await redis.hset('zoho:map:email_to_user_id', { [email]: String(zohoId) })
-      console.log(`[Provision] Updated Redis mappings: ${zohoId} <-> ${email}`)
-    } catch (redisError: any) {
-      console.error('[Provision] Redis update failed:', redisError?.message || redisError)
-      // Continue even if Redis fails
     }
 
     return NextResponse.json({ 

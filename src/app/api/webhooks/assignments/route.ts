@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { redis } from '@/lib/redis'
 import { db } from '@/lib/db'
-import { userProjects } from '@/lib/schema'
+import { userProjects, users } from '@/lib/schema'
 import { eq, and } from 'drizzle-orm'
 
 export async function POST(request: NextRequest) {
@@ -19,29 +18,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields (portalUserId, dealId)' }, { status: 400 })
     }
 
-    // 2. Lookup User Email
-    // Try Postgres first, then Redis fallback
+    // 2. Lookup User Email from Postgres
     let email: string | null = null
     
     try {
-      // Try to get email from Postgres users table
-      const { users } = await import('@/lib/schema')
       const [user] = await db.select().from(users).where(eq(users.zohoId, String(portalUserId))).limit(1)
       email = user?.email || null
     } catch (dbError: any) {
-      console.warn(`[Webhook] Postgres user lookup failed, trying Redis:`, dbError?.message || dbError)
-    }
-    
-    // Fallback to Redis map
-    if (!email) {
-      email = await redis.hget<string>('zoho:map:user_id_to_email', String(portalUserId))
+      console.error(`[Webhook] Postgres user lookup failed:`, dbError?.message || dbError)
     }
     
     if (!email) {
-        console.warn(`[Webhook] Unknown Portal User ID: ${portalUserId}. Run Cron Sync to populate map.`)
+        console.warn(`[Webhook] Unknown Portal User ID: ${portalUserId}. Run Cron Sync to populate users table.`)
         return NextResponse.json({ 
             error: 'User mapping not found',
-            hint: 'Trigger /api/cron/sync-projects to update user map'
+            hint: 'Trigger /api/cron/sync-projects to update users table'
         }, { status: 404 })
     }
 
@@ -64,18 +55,8 @@ export async function POST(request: NextRequest) {
       }
     } catch (dbError: any) {
       console.error(`[Webhook] Postgres update failed:`, dbError?.message || dbError)
-      // Continue to Redis update even if Postgres fails
-    }
-
-    // 4. Update Redis Access Set
-    const userKey = `user:${email}:projects`
-
-    if (action === 'remove') {
-        await redis.srem(userKey, String(dealId))
-        console.log(`[Webhook] Removed from Redis: ${email} -> ${dealId}`)
-    } else {
-        await redis.sadd(userKey, String(dealId))
-        console.log(`[Webhook] Added to Redis: ${email} -> ${dealId}`)
+      // Return error if Postgres fails
+      return NextResponse.json({ error: 'Failed to update user projects' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

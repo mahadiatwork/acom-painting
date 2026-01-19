@@ -1,6 +1,15 @@
 # Zoho CRM Auth Integration Guide
 
-This guide explains how to configure Zoho CRM to automatically provision users in the Roof Worx Field App when they are activated.
+This guide explains how to configure Zoho CRM to automatically provision users in the Acom Painting Field App when they are activated.
+
+## Architecture
+
+The authentication flow is: **Zoho CRM → Supabase Auth → Postgres Database**
+
+- Users are created/activated in Zoho CRM
+- Zoho webhook calls `/api/auth/provision` to create the user in Supabase Auth
+- User data is stored in Postgres `users` table with `zoho_id` mapping
+- All data operations use Postgres as the single source of truth
 
 ## Prerequisite
 - You must have the `ZOHO_WEBHOOK_SECRET` (generated previously, e.g., `xK9mPq2Lw5Nr8Yz4Jv3Ab7Dc6Ef1Gh0T`).

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { redis } from '@/lib/redis'
 import { db } from '@/lib/db'
 import { users } from '@/lib/schema'
 
@@ -37,12 +36,6 @@ export async function POST(request: NextRequest) {
       console.error('[Webhook] Postgres update failed:', dbError?.message || dbError)
       // Continue even if Postgres fails
     }
-
-    // 3. Update User Map in Redis
-    await redis.hset('zoho:map:user_id_to_email', { [String(id)]: Email })
-    await redis.hset('zoho:map:email_to_user_id', { [Email]: String(id) })
-    
-    console.log(`[Webhook] User Map Updated: ${id} -> ${Email}`)
 
     return NextResponse.json({ success: true })
 

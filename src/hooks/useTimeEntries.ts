@@ -93,7 +93,7 @@ export function useTimeEntries(options?: UseTimeEntriesOptions) {
 
 /**
  * Hook to get recent entries (last N entries)
- * Uses 7 days to only check Redis (fast) - recent entries should be in Redis
+ * Uses 7 days to fetch recent entries from Postgres
  */
 export function useRecentEntries(limit: number = 5) {
   const { data: rawEntries, ...rest } = useTimeEntries({ days: 7 })

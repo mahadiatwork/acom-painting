@@ -1,9 +1,8 @@
 import { db } from '@/lib/db'
-import { timeEntries } from '@/lib/schema'
-import { redis } from '@/lib/redis'
+import { timeEntries, users } from '@/lib/schema'
 import { zohoClient } from '@/lib/zoho'
 import { getUserTimezoneOffset } from '@/lib/timezone'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 interface TimeEntryData {
   id: string
@@ -22,13 +21,12 @@ interface TimeEntryData {
 }
 
 /**
- * Looks up Portal User ID from email using Redis map
- * Uses the reverse map stored during cron sync: email -> portal_user_id
+ * Looks up Portal User ID from email using Postgres users table
  */
 async function getPortalUserIdFromEmail(email: string): Promise<string | null> {
   try {
-    const userId = await redis.hget<string>('zoho:map:email_to_user_id', email)
-    return userId || null
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1)
+    return user?.zohoId || null
   } catch (error) {
     console.error('[Sync] Failed to lookup Portal User ID:', error)
     return null
@@ -36,34 +34,19 @@ async function getPortalUserIdFromEmail(email: string): Promise<string | null> {
 }
 
 /**
- * Updates Redis entry with synced flag
+ * Updates Postgres entry with synced flag
  */
-async function updateRedisSyncedFlag(entryId: string): Promise<void> {
-  const entryKey = `entry:${entryId}`
-  const existingJson = await redis.hget<string>(entryKey, 'data')
-  if (existingJson) {
-    try {
-      // Handle both string and already-parsed object cases
-      const existing = typeof existingJson === 'string' ? JSON.parse(existingJson) : existingJson
-      if (existing && typeof existing === 'object') {
-        const updated = {
-          ...existing,
-          synced: true,
-        }
-        // Update the hash with updated JSON (stored as string value in 'data' field)
-        await redis.hset(entryKey, { data: JSON.stringify(updated) })
-        console.log(`[Sync] Updated Redis synced flag: ${entryId}`)
-      }
-    } catch (parseError) {
-      console.error(`[Sync] Failed to parse entry ${entryId} for synced flag update:`, parseError)
-    }
+async function updateSyncedFlag(entryId: string): Promise<void> {
+  try {
+    await db.update(timeEntries)
+      .set({ synced: true })
+      .where(eq(timeEntries.id, entryId))
+    console.log(`[Sync] Updated Postgres synced flag: ${entryId}`)
+  } catch (error) {
+    console.error(`[Sync] Failed to update synced flag for entry ${entryId}:`, error)
   }
 }
 
-/**
- * Syncs a time entry to permanent storage (Postgres + Zoho)
- * Updates Redis with synced status on success
- */
 /**
  * Checks if error is a database connection error
  */
@@ -130,7 +113,7 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
         console.warn(`[Sync] Portal User ID not found for ${userEmail}, skipping Zoho sync`)
         // If Postgres succeeded, mark as synced
         if (postgresSuccess) {
-          await updateRedisSyncedFlag(entryData.id)
+          await updateSyncedFlag(entryData.id)
         }
         return
       }
@@ -158,9 +141,9 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
       // Don't throw - continue to mark as synced if Postgres succeeded
     }
 
-    // 3. Update Redis: Mark as synced if at least one permanent storage succeeded
+    // 3. Update Postgres: Mark as synced if at least one permanent storage succeeded
     if (postgresSuccess || zohoSuccess) {
-      await updateRedisSyncedFlag(entryData.id)
+      await updateSyncedFlag(entryData.id)
       console.log(`[Sync] Entry ${entryData.id} synced (Postgres: ${postgresSuccess}, Zoho: ${zohoSuccess})`)
     } else {
       console.warn(`[Sync] Entry ${entryData.id} failed to sync to both Postgres and Zoho - will retry later`)
@@ -176,74 +159,51 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
 
 /**
  * Retries failed syncs for a user (piggyback recovery)
- * Scans user's Redis ZSET for entries with synced: false and retries
+ * Queries Postgres for entries with synced: false and retries
  */
 export async function retryFailedSyncs(userEmail: string, userId: string): Promise<void> {
   try {
-    const zsetKey = `user:${userEmail}:entries:by-date`
+    // Get all unsynced entries from Postgres for this user
+    const unsyncedEntries = await db
+      .select()
+      .from(timeEntries)
+      .where(and(
+        eq(timeEntries.userId, userId),
+        eq(timeEntries.synced, false)
+      ))
     
-    // Get all entry IDs from the ZSET (last 30 days)
-    const entryIds = await redis.zrange(zsetKey, 0, -1)
-    
-    if (!entryIds || entryIds.length === 0) {
+    if (!unsyncedEntries || unsyncedEntries.length === 0) {
       return
     }
 
-    console.log(`[Retry] Checking ${entryIds.length} entries for failed syncs`)
-
-    // Check each entry's synced status
-    const failedEntries: string[] = []
-    
-    for (const entryId of entryIds) {
-      // Ensure entryId is a string
-      if (typeof entryId !== 'string') {
-        continue
-      }
-      
-      const entryKey = `entry:${entryId}`
-      const entryJson = await redis.hget<string>(entryKey, 'data')
-      
-      if (entryJson) {
-        try {
-          // Handle both string and already-parsed object cases
-          const entry = typeof entryJson === 'string' ? JSON.parse(entryJson) : entryJson
-          if (entry && typeof entry === 'object' && entry.synced === false) {
-            failedEntries.push(entryId) // entryId is now guaranteed to be string
-          }
-        } catch (parseError) {
-          console.error(`[Retry] Failed to parse entry ${entryId}:`, parseError)
-          // Skip this entry if parsing fails
-        }
-      }
-    }
-
-    if (failedEntries.length === 0) {
-      return
-    }
-
-    console.log(`[Retry] Found ${failedEntries.length} failed syncs, retrying...`)
+    console.log(`[Retry] Found ${unsyncedEntries.length} unsynced entries, retrying...`)
 
     // Retry each failed entry
-    for (const entryId of failedEntries) {
-      const entryKey = `entry:${entryId}`
-      const entryJson = await redis.hget<string>(entryKey, 'data')
-      
-      if (entryJson) {
-        try {
-          // Handle both string and already-parsed object cases
-          const entryData = typeof entryJson === 'string' ? JSON.parse(entryJson) : entryJson
-          // Ensure userId matches (security check)
-          if (entryData && typeof entryData === 'object' && entryData.userId === userId) {
-            await syncToPermanentStorage(entryData, userEmail)
-          }
-        } catch (parseError) {
-          console.error(`[Retry] Failed to parse entry ${entryId} for retry:`, parseError)
-          // Skip this entry if parsing fails
+    for (const entry of unsyncedEntries) {
+      try {
+        const entryData: TimeEntryData = {
+          id: entry.id,
+          userId: entry.userId,
+          jobId: entry.jobId,
+          jobName: entry.jobName,
+          date: entry.date,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          lunchStart: entry.lunchStart,
+          lunchEnd: entry.lunchEnd,
+          totalHours: entry.totalHours,
+          notes: entry.notes || '',
+          changeOrder: entry.changeOrder || '',
+          synced: entry.synced,
         }
+        await syncToPermanentStorage(entryData, userEmail)
+      } catch (error) {
+        console.error(`[Retry] Failed to retry entry ${entry.id}:`, error)
+        // Continue with next entry
       }
     }
 
-    console.log(`[Retry] Completed retry for ${failedEntries.length} entries`)
+    console.log(`[Retry] Completed retry for ${unsyncedEntries.length} entries`)
   } catch (error) {
     console.error('[Retry] Failed to retry syncs:', error)
     // Don't throw - this is a background operation

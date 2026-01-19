@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { redis } from '@/lib/redis'
 import { db } from '@/lib/db'
 import { projects } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
@@ -19,19 +18,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    // 2. Fetch existing project from Postgres (source of truth)
+    // 2. Fetch existing project from Postgres
     let existingProject: any = null
     try {
       const [project] = await db.select().from(projects).where(eq(projects.id, String(id))).limit(1)
       existingProject = project || null
     } catch (dbError: any) {
       console.warn(`[Webhook] Postgres read failed for project ${id}, continuing:`, dbError?.message || dbError)
-    }
-
-    // 3. Fallback to Redis if Postgres miss
-    if (!existingProject) {
-      const existingJson = await redis.hget<string>('projects:data', String(id))
-      existingProject = existingJson ? JSON.parse(existingJson) : {}
+      existingProject = {}
     }
     
     // 4. Transform & Merge
@@ -73,12 +67,8 @@ export async function POST(request: NextRequest) {
       console.log(`[Webhook] Written to Postgres projects table: ${id}`)
     } catch (dbError: any) {
       console.error(`[Webhook] Postgres write failed for project ${id}:`, dbError?.message || dbError)
-      // Continue to Redis update even if Postgres fails
+      return NextResponse.json({ error: 'Failed to update project' }, { status: 500 })
     }
-
-    // 6. Update Redis cache
-    await redis.hset('projects:data', { [String(id)]: JSON.stringify(newProject) })
-    console.log(`[Webhook] Updated Redis cache for project ${id}`)
 
     return NextResponse.json({ success: true, action: existingProject ? 'updated' : 'created' })
 
