@@ -19,22 +19,39 @@ export async function GET(request: Request) {
       throw new Error('Invalid response from Zoho CRM (Deals)')
     }
 
-    // Transform Data
-    const projectsData = deals.map((deal: any) => ({
-      id: String(deal.id),
-      name: deal.Deal_Name || '',
-      customer: deal.Account_Name?.name || 'Unknown',
-      status: deal.Stage || 'Active',
-      address: deal.Shipping_Street || '',
-      salesRep: deal.Owner?.name || '',
-      supplierColor: deal.Supplier_Color || '',
-      trimColor: deal.Trim_Coil_Color || '',
-      accessoryColor: deal.Shingle_Accessory_Color || '',
-      gutterType: deal.Gutter_Types || '',
-      sidingStyle: deal.Siding_Style || '',
-      workOrderLink: '',
-      updatedAt: new Date().toISOString(),
-    }))
+    // Transform Data - only essential fields
+    const projectsData = deals.map((deal: any) => {
+      // Get date - prefer Closing_Date, fallback to Project_Start_Date
+      let projectDate = ''
+      if (deal.Closing_Date) {
+        projectDate = deal.Closing_Date
+      } else if (deal.Project_Start_Date) {
+        projectDate = deal.Project_Start_Date
+      }
+      
+      // Get address - prefer Shipping_Street, or combine address fields
+      let projectAddress = ''
+      if (deal.Shipping_Street) {
+        projectAddress = deal.Shipping_Street
+      } else {
+        // Combine address components
+        const addressParts: string[] = []
+        if (deal.Single_Line_1) addressParts.push(deal.Single_Line_1)
+        if (deal.Single_Line_2) addressParts.push(deal.Single_Line_2)
+        if (deal.State) addressParts.push(deal.State)
+        if (deal.Zip_Code) addressParts.push(deal.Zip_Code)
+        projectAddress = addressParts.join(', ')
+      }
+      
+      return {
+        id: String(deal.id),
+        name: deal.Deal_Name || '',
+        status: deal.Stage || 'Project Accepted',
+        date: projectDate,
+        address: projectAddress,
+        updatedAt: new Date().toISOString(),
+      }
+    })
 
     // 1. Write to Postgres projects table (batch UPSERT)
     try {
@@ -49,16 +66,9 @@ export async function GET(request: Request) {
               target: projects.id,
               set: {
                 name: project.name,
-                customer: project.customer,
                 status: project.status,
+                date: project.date,
                 address: project.address,
-                salesRep: project.salesRep,
-                supplierColor: project.supplierColor,
-                trimColor: project.trimColor,
-                accessoryColor: project.accessoryColor,
-                gutterType: project.gutterType,
-                sidingStyle: project.sidingStyle,
-                workOrderLink: project.workOrderLink,
                 updatedAt: project.updatedAt,
               }
             })

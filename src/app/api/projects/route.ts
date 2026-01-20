@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
-import { projects, userProjects } from '@/lib/schema'
+import { projects } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
@@ -16,47 +16,33 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log(`[API] Fetching projects for user: ${user.email}`)
+    console.log(`[API] Fetching projects with status "Project Accepted"`)
 
-    // Query Postgres: JOIN user_projects with projects
+    // Query Postgres: Get all projects with status "Project Accepted"
     try {
       const postgresProjects = await db
         .select({
           id: projects.id,
           name: projects.name,
-          customer: projects.customer,
           status: projects.status,
+          date: projects.date,
           address: projects.address,
-          salesRep: projects.salesRep,
-          supplierColor: projects.supplierColor,
-          trimColor: projects.trimColor,
-          accessoryColor: projects.accessoryColor,
-          gutterType: projects.gutterType,
-          sidingStyle: projects.sidingStyle,
-          workOrderLink: projects.workOrderLink,
         })
-        .from(userProjects)
-        .innerJoin(projects, eq(userProjects.projectId, projects.id))
-        .where(eq(userProjects.userEmail, user.email))
+        .from(projects)
+        .where(eq(projects.status, 'Project Accepted'))
 
-      console.log(`[API] Postgres query returned ${postgresProjects.length} rows`)
+      console.log(`[API] Postgres query returned ${postgresProjects.length} projects with status "Project Accepted"`)
 
+      // Return only the 4 essential fields: name, status, date, address
       const parsedProjects = postgresProjects.map(p => ({
         id: p.id,
         name: p.name,
-        customer: p.customer,
         status: p.status,
+        date: p.date || '',
         address: p.address || '',
-        salesRep: p.salesRep || '',
-        supplierColor: p.supplierColor || '',
-        trimColor: p.trimColor || '',
-        accessoryColor: p.accessoryColor || '',
-        gutterType: p.gutterType || '',
-        sidingStyle: p.sidingStyle || '',
-        workOrderLink: p.workOrderLink || '',
       }))
 
-      console.log(`[API] Fetched ${parsedProjects.length} projects from Postgres for ${user.email}`)
+      console.log(`[API] Fetched ${parsedProjects.length} projects from Postgres`)
       
       return NextResponse.json(parsedProjects)
     } catch (dbError: any) {

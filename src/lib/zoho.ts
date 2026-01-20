@@ -80,7 +80,7 @@ class ZohoClient {
       const response = await axios.get(`${this.apiDomain}/crm/v2/Deals`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
         params: {
-            fields: 'id,Deal_Name,Account_Name,Stage,Pipeline,Shipping_Street,Owner,Supplier_Color,Trim_Coil_Color,Shingle_Accessory_Color,Gutter_Types,Siding_Style'
+            fields: 'id,Deal_Name,Stage,Closing_Date,Project_Start_Date,Shipping_Street,Single_Line_1,Single_Line_2,State,Zip_Code'
         }
       });
       return response.data.data;

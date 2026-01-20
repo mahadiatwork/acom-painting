@@ -47,21 +47,14 @@ export const insertTimeEntrySchema = createInsertSchema(timeEntries).extend({
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey(), // Zoho Deal ID
   name: text("name").notNull(),
-  customer: text("customer").notNull(),
-  status: text("status").notNull(),
+  status: text("status").notNull().default("Project Accepted"),
+  date: text("date").default(""), // Project date (Closing_Date or Project_Start_Date from Zoho)
   address: text("address").default(""),
-  salesRep: text("sales_rep").default(""),
-  supplierColor: text("supplier_color").default(""),
-  trimColor: text("trim_color").default(""),
-  accessoryColor: text("accessory_color").default(""),
-  gutterType: text("gutter_type").default(""),
-  sidingStyle: text("siding_style").default(""),
-  workOrderLink: text("work_order_link").default(""),
   createdAt: text("created_at").default(sql`now()`),
   updatedAt: text("updated_at").default(sql`now()`),
 }, (table) => ({
   statusIdx: index("projects_status_idx").on(table.status),
-  customerIdx: index("projects_customer_idx").on(table.customer),
+  nameIdx: index("projects_name_idx").on(table.name),
 }));
 
 export const userProjects = pgTable("user_projects", {
