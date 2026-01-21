@@ -15,16 +15,19 @@ Both scripts use the same payload structure and call idempotent endpoints that h
 
 ## Prerequisites
 
-1. **Zoho Connection Setup**:
-   - Create a Connection named `acom_painting_app_conn` in Zoho CRM
-   - Set Authentication Type: `API Key`
-   - Parameter Name: `Authorization`
-   - Value: `Bearer YOUR_ZOHO_WEBHOOK_SECRET` (from Vercel environment variables)
-   - Add to: `Header`
+1. **Zoho Org Variable Setup**:
+   - Go to **Setup > Developer Space > Org Variables** in Zoho CRM
+   - Create a new Org Variable:
+     - **Variable Name**: `ZOHO_WEBHOOK_SECRET`
+     - **Value**: Your `ZOHO_WEBHOOK_SECRET` from Vercel environment variables
+     - **Type**: Text
+   - **Important**: The value must match exactly with the `ZOHO_WEBHOOK_SECRET` in your Vercel deployment
 
 2. **Environment Variables**:
    - Ensure `ZOHO_WEBHOOK_SECRET` is set in Vercel
    - App URL: `https://acom-painting.vercel.app`
+
+**Note**: These scripts use manual headers instead of Zoho Connections because OAuth connections are designed for Zoho APIs, not external webhooks. The scripts will retrieve the secret from the Org Variable and add it as an `Authorization: Bearer <secret>` header.
 
 ---
 
@@ -106,21 +109,45 @@ payload.put("date", dealDate);
 payload.put("address", dealAddress);
 payload.put("sync_source", "trigger");
 
-// 5. Invoke Supabase sync API using Connection
+// 5. Get webhook secret from Org Variable
+secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+
+// Debug: Verify secret was retrieved
+if (secret == null || secret == "")
+{
+    info "ERROR: ZOHO_WEBHOOK_SECRET Org Variable is empty or not found!";
+    info "Please verify the Org Variable exists and has a value.";
+    return;
+}
+
+// Trim any whitespace from secret (common issue)
+secret = secret.trim();
+
+// 6. Build headers manually (required for external APIs)
+headers = Map();
+headers.put("Authorization", "Bearer " + secret);
+headers.put("Content-Type", "application/json");
+
+// 7. Invoke Supabase sync API with manual headers
 url = "https://acom-painting.vercel.app/api/sync/projects/trigger";
+
+// Debug logging
+info "Syncing Deal " + dealIdStr + " to Supabase";
+info "URL: " + url;
+info "Authorization header set (secret length: " + secret.length() + " chars)";
 
 response = invokeurl
 [
     url: url
     type: POST
     parameters: payload.toString()
-    connection: "acom_painting_app_conn"
+    headers: headers
 ];
 
-// 6. Log response for audit/debug
+// 8. Log response for audit/debug
 info "Trigger Sync Response for Deal " + dealIdStr + ": " + response;
 
-// 7. Check if sync was successful
+// 9. Check if sync was successful
 if (response != null && response.contains("success"))
 {
     info "Project " + dealIdStr + " synced successfully to Supabase";
@@ -159,6 +186,21 @@ currentTime = zoho.currenttime;
 syncRunId = currentTime.toString("yyyy-MM-dd") + "-daily-" + currentTime.toString("HHmmss");
 
 info "Starting daily sync run: " + syncRunId;
+
+// 1.5. Get webhook secret from Org Variable (once, outside loop)
+secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+
+// Verify secret was retrieved
+if (secret == null || secret == "")
+{
+    info "ERROR: ZOHO_WEBHOOK_SECRET Org Variable is empty or not found!";
+    info "Please verify the Org Variable exists and has a value.";
+    return;
+}
+
+// Trim any whitespace from secret (common issue)
+secret = secret.trim();
+info "Secret retrieved (length: " + secret.length() + " chars)";
 
 // 2. Pagination settings
 page = 1;
@@ -254,7 +296,12 @@ while (moreRecords)
             payload.put("sync_source", "daily");
             payload.put("sync_run_id", syncRunId);
             
-            // Call daily sync endpoint
+            // Build headers manually (secret already retrieved above)
+            headers = Map();
+            headers.put("Authorization", "Bearer " + secret);
+            headers.put("Content-Type", "application/json");
+            
+            // Call daily sync endpoint with manual headers
             url = "https://acom-painting.vercel.app/api/sync/projects/daily";
             
             response = invokeurl
@@ -262,7 +309,7 @@ while (moreRecords)
                 url: url
                 type: POST
                 parameters: payload.toString()
-                connection: "acom_painting_app_conn"
+                headers: headers
             ];
             
             totalProcessed = totalProcessed + 1;
@@ -346,33 +393,28 @@ if (totalErrors > 0)
 
 ---
 
-## 3. Alternative: Manual Headers (If Not Using Connection)
+## 3. Alternative: Using Zoho Connection (If You Have API Key Connection)
 
-If you prefer not to use a Zoho Connection, you can use manual headers:
+If you have created a Zoho Connection with API Key authentication (not OAuth), you can use it instead of manual headers:
 
 ```javascript
-// Get secret from Org Variable (set this up in Zoho)
-secret = zoho.crm.getOrgVariable("ACOM_PAINTING_WEBHOOK_SECRET");
-
-// Build headers manually
-headers = Map();
-headers.put("Authorization", "Bearer " + secret);
-headers.put("Content-Type", "application/json");
-
-// Use headers in invokeurl
+// Use connection instead of manual headers
 response = invokeurl
 [
     url: url
     type: POST
     parameters: payload.toString()
-    headers: headers
+    connection: "acom_painting_app_conn"  // Must be API Key connection, not OAuth
 ];
 ```
 
-**Note**: Make sure to set up the Org Variable `ACOM_PAINTING_WEBHOOK_SECRET` in Zoho CRM:
-- Go to **Setup > Developer Space > Org Variables**
-- Create variable: `ACOM_PAINTING_WEBHOOK_SECRET`
-- Value: Your `ZOHO_WEBHOOK_SECRET` from Vercel
+**Note**: 
+- Zoho OAuth connections (like `portal_conn`) are designed for Zoho APIs only and won't work for external webhooks
+- If using a connection, it must be configured as:
+  - **Authentication Type**: `API Key`
+  - **Parameter Name**: `Authorization`
+  - **Value**: `Bearer YOUR_ZOHO_WEBHOOK_SECRET`
+  - **Add to**: `Header`
 
 ---
 
@@ -400,8 +442,16 @@ response = invokeurl
 ### Common Issues
 
 1. **401 Unauthorized**:
-   - Verify `ZOHO_WEBHOOK_SECRET` matches in both Zoho Connection and Vercel
-   - Check that the Authorization header is being sent correctly
+   - **Most Common Cause**: Secret mismatch between Zoho and Vercel
+   - Verify `ZOHO_WEBHOOK_SECRET` Org Variable exists in Zoho CRM
+   - **Critical**: The Org Variable value must match EXACTLY with `ZOHO_WEBHOOK_SECRET` in Vercel (case-sensitive, no extra spaces)
+   - To verify:
+     1. Copy the value from Zoho Org Variable
+     2. Go to Vercel → Your Project → Settings → Environment Variables
+     3. Compare `ZOHO_WEBHOOK_SECRET` value character-by-character
+   - Check Zoho execution logs for the debug message showing secret length
+   - If secret is null/empty in logs, the Org Variable name might be misspelled
+   - Ensure there are no leading/trailing spaces (script now trims automatically)
 
 2. **404 Not Found**:
    - Verify the URL is correct: `https://acom-painting.vercel.app/api/sync/projects/trigger`

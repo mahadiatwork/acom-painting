@@ -155,6 +155,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/sync/projects/daily/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/sync/projects/daily">> = Specific
+  const handler = {} as typeof import("../../src/app/api/sync/projects/daily/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/sync/projects/trigger/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/sync/projects/trigger">> = Specific
+  const handler = {} as typeof import("../../src/app/api/sync/projects/trigger/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/time-entries/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/time-entries">> = Specific
