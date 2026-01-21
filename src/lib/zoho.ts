@@ -230,7 +230,7 @@ class ZohoClient {
       }
       
       const response = await axios.post(
-        `${this.apiDomain}/crm/v2/Time_Sheets`,  // Changed from Time_Entries
+        `${this.apiDomain}/crm/v2/Time_Entries`,  // Zoho CRM module name
         { data: [zohoPayload] },
         {
           headers: { Authorization: `Zoho-oauthtoken ${token}` }

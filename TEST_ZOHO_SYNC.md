@@ -159,7 +159,7 @@ fetch('/api/test/zoho-sync', {
    - Check lookup field IDs are valid
 
 3. **404 Not Found:**
-   - Verify module name is correct (`Time_Sheets`)
+   - Verify module name is correct (`Time_Entries`)
    - Check API domain is correct
 
 4. **500 Internal Server Error:**

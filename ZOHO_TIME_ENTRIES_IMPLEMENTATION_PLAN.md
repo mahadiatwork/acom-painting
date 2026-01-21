@@ -1,18 +1,18 @@
 # Zoho Time Entries Implementation Plan
 
 ## Overview
-Implement proper mapping of time entry data to Zoho CRM's `Time_Sheets` module with correct field mappings and timezone handling.
+Implement proper mapping of time entry data to Zoho CRM's `Time_Entries` module with correct field mappings and timezone handling.
 
 ## Current Issues
 
-1. **Wrong Module Name:** Currently using `Time_Entries`, should be `Time_Sheets`
+1. **Module Name:** Using `Time_Entries` (correct)
 2. **Incorrect Field Mappings:** Using wrong API field names
 3. **Missing Timezone Handling:** DateTime fields need timezone offset format
 4. **Missing Lookup Fields:** Need to map `Project` (Deal) and `Contractor` (Portal User) as lookup fields
 
 ## Zoho CRM API Field Mappings
 
-### From Screenshots - Time_Sheets Module Fields:
+### From Screenshots - Time_Entries Module Fields:
 
 | Field Label | API Name | Data Type | Custom Field | Our Data Source |
 |------------|----------|-----------|--------------|-----------------|
@@ -36,7 +36,7 @@ Implement proper mapping of time entry data to Zoho CRM's `Time_Sheets` module w
 **File:** `src/lib/zoho.ts`
 
 **Changes:**
-1. Change module name from `Time_Entries` to `Time_Sheets`
+1. Module name is `Time_Entries` (correct)
 2. Update method signature to accept properly formatted data
 3. Add helper method to format DateTime with timezone
 
@@ -86,7 +86,7 @@ async createTimeEntry(data: {
     };
     
     const response = await axios.post(
-      `${this.apiDomain}/crm/v2/Time_Sheets`,  // Changed from Time_Entries
+      `${this.apiDomain}/crm/v2/Time_Entries`,  // Zoho CRM module name
       { data: [zohoPayload] },
       {
         headers: { Authorization: `Zoho-oauthtoken ${token}` }
