@@ -1,21 +1,4 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/auth/provision/route": "app/api/auth/provision/route.js",
-  "/api/webhooks/assignments/route": "app/api/webhooks/assignments/route.js",
-  "/api/webhooks/projects/route": "app/api/webhooks/projects/route.js",
-  "/api/webhooks/users/route": "app/api/webhooks/users/route.js",
-  "/api/projects/route": "app/api/projects/route.js",
-  "/api/sync/projects/daily/route": "app/api/sync/projects/daily/route.js",
-  "/api/sync/projects/trigger/route": "app/api/sync/projects/trigger/route.js",
-  "/api/cron/sync-projects/route": "app/api/cron/sync-projects/route.js",
-  "/api/time-entries/route": "app/api/time-entries/route.js",
-  "/(auth)/forgot-password/page": "app/(auth)/forgot-password/page.js",
-  "/(auth)/update-password/page": "app/(auth)/update-password/page.js",
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(main)/entry/new/page": "app/(main)/entry/new/page.js",
-  "/(main)/profile/page": "app/(main)/profile/page.js",
-  "/(main)/history/page": "app/(main)/history/page.js",
-  "/(main)/notices/page": "app/(main)/notices/page.js",
-  "/(main)/projects/page": "app/(main)/projects/page.js",
-  "/(main)/page": "app/(main)/page.js"
+  "/(main)/page": "app/(main)/page.js",
+  "/(main)/entry/new/page": "app/(main)/entry/new/page.js"
 }

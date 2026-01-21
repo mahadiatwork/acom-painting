@@ -136,7 +136,11 @@ export default function Dashboard() {
               </div>
             ) : (
               recentEntries.map((entry) => (
-                <div key={entry.id} className="bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center">
+                <div 
+                  key={entry.id} 
+                  onClick={() => router.push(`/entry/${entry.id}`)}
+                  className="bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+                >
                   <div>
                     <h4 className="font-bold text-gray-800 line-clamp-1">{entry.jobName}</h4>
                     <div className="flex items-center text-gray-500 text-xs mt-1 gap-2">

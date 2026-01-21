@@ -73,7 +73,11 @@ export default function History() {
         ) : (
           <div className="space-y-4 pb-4">
             {entries.map((entry, index) => (
-              <div key={entry.id} className={`bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden ${index === entries.length - 1 ? 'mb-4' : ''}`}>
+              <div 
+                key={entry.id} 
+                onClick={() => router.push(`/entry/${entry.id}`)}
+                className={`bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/50 transition-all ${index === entries.length - 1 ? 'mb-4' : ''}`}
+              >
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
 
                 <div className="flex justify-between items-start mb-2">

@@ -15,6 +15,21 @@ export interface TimeEntry {
   synced: boolean
   notes?: string
   changeOrder?: string
+  // Sundry items
+  maskingPaperRoll?: string
+  plasticRoll?: string
+  puttySpackleTub?: string
+  caulkTube?: string
+  whiteTapeRoll?: string
+  orangeTapeRoll?: string
+  floorPaperRoll?: string
+  tip?: string
+  sandingSponge?: string
+  inchRollerCover18?: string
+  inchRollerCover9?: string
+  miniCover?: string
+  masks?: string
+  brickTapeRoll?: string
 }
 
 interface UseTimeEntriesOptions {

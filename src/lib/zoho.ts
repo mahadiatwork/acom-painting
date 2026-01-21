@@ -139,9 +139,38 @@ class ZohoClient {
    * @returns Formatted DateTime string for Zoho CRM
    */
   private formatZohoDateTime(date: string, time: string, timezone: string): string {
-    // Combine date (YYYY-MM-DD) + time (HH:MM) + timezone offset
-    // Example: "2024-01-15" + "09:00" + "-07:00" = "2024-01-15T09:00:00-07:00"
-    return `${date}T${time}:00${timezone}`;
+    // Zoho requires format: yyyy-MM-ddTHH:mm:ss±HH:mm
+    // Example: "2026-01-21T05:06:00-07:00"
+    
+    // Ensure time is in HH:MM format (24-hour)
+    // Remove any AM/PM if present and convert to 24-hour
+    let normalizedTime = time.trim();
+    
+    // If time includes AM/PM, convert to 24-hour format
+    const isPM = normalizedTime.toUpperCase().includes('PM');
+    const isAM = normalizedTime.toUpperCase().includes('AM');
+    
+    if (isPM || isAM) {
+      // Remove AM/PM
+      normalizedTime = normalizedTime.replace(/[AaPp][Mm]/g, '').trim();
+      const [hours, minutes] = normalizedTime.split(':').map(Number);
+      
+      if (isPM && hours !== 12) {
+        normalizedTime = `${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      } else if (isAM && hours === 12) {
+        normalizedTime = `00:${String(minutes).padStart(2, '0')}`;
+      } else {
+        normalizedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      }
+    }
+    
+    // Ensure timezone has correct format (±HH:mm)
+    // timezone should already be in format like "-07:00" or "+05:30"
+    const formatted = `${date}T${normalizedTime}:00${timezone}`;
+    
+    console.log(`[Zoho] Formatting DateTime: date=${date}, time=${time} -> normalized=${normalizedTime}, timezone=${timezone}, result=${formatted}`);
+    
+    return formatted;
   }
 
   async createTimeEntry(data: {
@@ -164,7 +193,7 @@ class ZohoClient {
       
       const token = await this.getAccessToken();
       
-      // Format DateTime fields with timezone
+      // Format DateTime fields with timezone (Zoho format: yyyy-MM-ddTHH:mm:ss±HH:mm)
       const startDateTime = this.formatZohoDateTime(data.date, data.startTime, data.timezone);
       const endDateTime = this.formatZohoDateTime(data.date, data.endTime, data.timezone);
       
@@ -176,8 +205,8 @@ class ZohoClient {
         Job: data.projectId,                    // Lookup field (Deal ID)
         Portal_User: data.contractorId,         // Lookup field (Portal User ID)
         Date: data.date,                        // Date field (YYYY-MM-DD)
-        Start_Time: startDateTime,               // DateTime with timezone
-        End_Time: endDateTime,                  // DateTime with timezone
+        Start_Time: startDateTime,               // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)
+        End_Time: endDateTime,                  // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)
         Total_Hours: data.totalHours,            // Single Line
         Time_Entry_Note: data.notes || '',      // Multi Line (Large)
       };
@@ -187,6 +216,9 @@ class ZohoClient {
         zohoPayload.Lunch_Start = this.formatZohoDateTime(data.date, data.lunchStart, data.timezone);
         zohoPayload.Lunch_End = this.formatZohoDateTime(data.date, data.lunchEnd, data.timezone);
       }
+      
+      // Log the payload for debugging
+      console.log('[Zoho] Creating time entry with payload:', JSON.stringify(zohoPayload, null, 2));
 
       // Add sundry items (only if quantity > 0)
       if (data.sundryItems) {
@@ -205,9 +237,22 @@ class ZohoClient {
         }
       );
       
+      console.log('[Zoho] Time entry created successfully:', response.data);
       return response.data.data[0];
-    } catch (error) {
-      console.error('Zoho API Error (createTimeEntry):', error);
+    } catch (error: any) {
+      console.error('[Zoho] API Error (createTimeEntry):', error?.message || error);
+      
+      // Log detailed error response if available
+      if (error?.response) {
+        console.error('[Zoho] Error response status:', error.response.status);
+        console.error('[Zoho] Error response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      // Log the payload that failed for debugging
+      if (error?.config?.data) {
+        console.error('[Zoho] Failed payload:', error.config.data);
+      }
+      
       throw error;
     }
   }
