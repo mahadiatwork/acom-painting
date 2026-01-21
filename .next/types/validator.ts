@@ -182,6 +182,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/test/zoho-sync/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/test/zoho-sync">> = Specific
+  const handler = {} as typeof import("../../src/app/api/test/zoho-sync/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/time-entries/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/time-entries">> = Specific
