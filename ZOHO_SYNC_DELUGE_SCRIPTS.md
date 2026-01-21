@@ -148,13 +148,43 @@ response = invokeurl
 info "Trigger Sync Response for Deal " + dealIdStr + ": " + response;
 
 // 9. Check if sync was successful
-if (response != null && response.contains("success"))
+// IMPORTANT: Check for "success":true (not just "success" which matches false too)
+if (response != null && response.contains("\"success\":true"))
 {
     info "Project " + dealIdStr + " synced successfully to Supabase";
 }
 else
 {
-    info "ERROR: Failed to sync project " + dealIdStr + ". Response: " + response;
+    // Log error details
+    info "ERROR: Failed to sync project " + dealIdStr;
+    if (response != null)
+    {
+        // Try to extract error reason from response
+        if (response.contains("\"reason\""))
+        {
+            // Extract reason value (simple string extraction)
+            reasonStart = response.indexOf("\"reason\":\"") + 10;
+            reasonEnd = response.indexOf("\"", reasonStart);
+            if (reasonEnd > reasonStart)
+            {
+                reason = response.subString(reasonStart, reasonEnd);
+                info "Error Reason: " + reason;
+            }
+        }
+        if (response.contains("\"details\""))
+        {
+            // Extract details value
+            detailsStart = response.indexOf("\"details\":\"") + 12;
+            detailsEnd = response.indexOf("\"", detailsStart);
+            if (detailsEnd > detailsStart)
+            {
+                details = response.subString(detailsStart, detailsEnd);
+                info "Error Details: " + details;
+            }
+        }
+    }
+    info "Full Response: " + response;
+    
     // Optional: Add note to Deal record for tracking
     // zoho.crm.addNotes("Deals", dealIdStr, "Sync failed: " + response);
 }

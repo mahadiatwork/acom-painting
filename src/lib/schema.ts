@@ -29,6 +29,21 @@ export const timeEntries = pgTable("time_entries", {
   changeOrder: text("change_order").default(""),
   synced: boolean("synced").default(false).notNull(),
   createdAt: text("created_at").default(sql`now()`),
+  // Sundry Items (all Number type in Zoho)
+  maskingPaperRoll: text("masking_paper_roll").default("0"),
+  plasticRoll: text("plastic_roll").default("0"),
+  puttySpackleTub: text("putty_spackle_tub").default("0"),
+  caulkTube: text("caulk_tube").default("0"),
+  whiteTapeRoll: text("white_tape_roll").default("0"),
+  orangeTapeRoll: text("orange_tape_roll").default("0"),
+  floorPaperRoll: text("floor_paper_roll").default("0"),
+  tip: text("tip").default("0"),
+  sandingSponge: text("sanding_sponge").default("0"),
+  inchRollerCover18: text("inch_roller_cover_18").default("0"), // 18" Roller Cover
+  inchRollerCover9: text("inch_roller_cover_9").default("0"),  // 9" Roller Cover
+  miniCover: text("mini_cover").default("0"),
+  masks: text("masks").default("0"),
+  brickTapeRoll: text("brick_tape_roll").default("0"),
 }, (table) => ({
   userIdIdx: index("user_id_idx").on(table.userId),
   dateIdx: index("date_idx").on(table.date),

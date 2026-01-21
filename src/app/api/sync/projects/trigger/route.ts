@@ -45,6 +45,17 @@ export async function POST(request: NextRequest) {
     const zohoRecordId = validated.zoho_record_id
 
     console.log(`[Sync Trigger] Processing project: ${zohoRecordId}, status: ${validated.status}`)
+    
+    // Debug: Log connection string info (sanitized)
+    const dbUrl = process.env.DATABASE_URL || 'NOT SET'
+    const safeDbUrl = dbUrl.replace(/:([^:@]+)@/, ':****@')
+    console.log(`[Sync Trigger] DATABASE_URL (sanitized): ${safeDbUrl}`)
+    
+    // Check if using wrong connection type
+    if (dbUrl.includes('db.') && dbUrl.includes('.supabase.co:5432')) {
+      console.error('[Sync Trigger] ERROR: Using direct connection (db.xxx.supabase.co:5432) instead of pooler!')
+      console.error('[Sync Trigger] Should use: aws-1-us-west-1.pooler.supabase.com:6543')
+    }
 
     // 3. Check if project already exists
     const existing = await db
@@ -119,11 +130,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check for database connection errors
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    let details = errorMessage
+    
+    if (errorMessage.includes('ENOTFOUND') && errorMessage.includes('db.') && errorMessage.includes('.supabase.co')) {
+      details = `Database connection error: Using direct connection (db.xxx.supabase.co:5432) instead of connection pooling (pooler.supabase.com:6543). Please update DATABASE_URL in Vercel to use the Connection Pooling URL from Supabase Settings > Database > Connection Pooling. Original error: ${errorMessage}`
+    }
+
     return NextResponse.json(
       {
         success: false,
         reason: 'internal_error',
-        details: error instanceof Error ? error.message : String(error)
+        details: details
       },
       { status: 500 }
     )

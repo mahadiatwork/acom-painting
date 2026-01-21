@@ -150,8 +150,12 @@ class ZohoClient {
     date: string;             // YYYY-MM-DD
     startTime: string;        // HH:MM
     endTime: string;          // HH:MM
-    notes?: string;            // Task_Note
-    timezone: string;          // -07:00 format
+    lunchStart?: string;      // HH:MM (optional)
+    lunchEnd?: string;        // HH:MM (optional)
+    totalHours: string;       // Calculated hours
+    notes?: string;            // Time_Entry_Note
+    timezone: string;         // -07:00 format
+    sundryItems?: Record<string, number>; // Map of Zoho API names to quantities
   }) {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
@@ -167,15 +171,31 @@ class ZohoClient {
       // Auto-generate Name field
       const entryName = `Time Entry - ${data.date} ${data.startTime} to ${data.endTime}`;
       
-      const zohoPayload = {
+      const zohoPayload: Record<string, any> = {
         Name: entryName,
-        Project: data.projectId,                    // Lookup field (Deal ID)
-        Contractor: data.contractorId,              // Lookup field (Portal User ID)
-        Time_Entry_Date: data.date,                 // Date field (YYYY-MM-DD)
-        Start_Time: startDateTime,                  // DateTime with timezone
-        End_Time: endDateTime,                      // DateTime with timezone
-        Task_Note: data.notes || '',                // Multi Line
+        Job: data.projectId,                    // Lookup field (Deal ID)
+        Portal_User: data.contractorId,         // Lookup field (Portal User ID)
+        Date: data.date,                        // Date field (YYYY-MM-DD)
+        Start_Time: startDateTime,               // DateTime with timezone
+        End_Time: endDateTime,                  // DateTime with timezone
+        Total_Hours: data.totalHours,            // Single Line
+        Time_Entry_Note: data.notes || '',      // Multi Line (Large)
       };
+
+      // Add lunch times if provided
+      if (data.lunchStart && data.lunchEnd) {
+        zohoPayload.Lunch_Start = this.formatZohoDateTime(data.date, data.lunchStart, data.timezone);
+        zohoPayload.Lunch_End = this.formatZohoDateTime(data.date, data.lunchEnd, data.timezone);
+      }
+
+      // Add sundry items (only if quantity > 0)
+      if (data.sundryItems) {
+        Object.entries(data.sundryItems).forEach(([apiName, quantity]) => {
+          if (quantity > 0) {
+            zohoPayload[apiName] = quantity;
+          }
+        });
+      }
       
       const response = await axios.post(
         `${this.apiDomain}/crm/v2/Time_Sheets`,  // Changed from Time_Entries

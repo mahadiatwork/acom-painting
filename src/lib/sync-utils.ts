@@ -18,6 +18,21 @@ interface TimeEntryData {
   notes?: string
   changeOrder?: string
   synced?: boolean
+  // Add sundry item fields
+  maskingPaperRoll?: string
+  plasticRoll?: string
+  puttySpackleTub?: string
+  caulkTube?: string
+  whiteTapeRoll?: string
+  orangeTapeRoll?: string
+  floorPaperRoll?: string
+  tip?: string
+  sandingSponge?: string
+  inchRollerCover18?: string
+  inchRollerCover9?: string
+  miniCover?: string
+  masks?: string
+  brickTapeRoll?: string
 }
 
 /**
@@ -121,14 +136,45 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
       // Get timezone offset
       const timezone = getUserTimezoneOffset()
       
+      // Map sundry items from database to Zoho API names
+      const sundryItemsMap: Record<string, string> = {
+        maskingPaperRoll: 'Masking_Paper_Roll',
+        plasticRoll: 'Plastic_Roll',
+        puttySpackleTub: 'Putty_Spackle_Tub',
+        caulkTube: 'Caulk_Tube',
+        whiteTapeRoll: 'White_Tape_Roll',
+        orangeTapeRoll: 'Orange_Tape_Roll',
+        floorPaperRoll: 'Floor_Paper_Roll',
+        tip: 'Tip',
+        sandingSponge: 'Sanding_Sponge',
+        inchRollerCover18: 'Inch_Roller_Cover1',  // 18" Roller Cover
+        inchRollerCover9: 'Inch_Roller_Cover',     // 9" Roller Cover
+        miniCover: 'Mini_Cover',
+        masks: 'Masks',
+        brickTapeRoll: 'Brick_Tape_Roll',
+      }
+
+      // Build sundry items object for Zoho
+      const zohoSundryItems: Record<string, number> = {}
+      Object.entries(sundryItemsMap).forEach(([dbKey, zohoApiName]) => {
+        const quantity = parseInt(entryData[dbKey as keyof TimeEntryData] as string || '0', 10)
+        if (quantity > 0) {
+          zohoSundryItems[zohoApiName] = quantity
+        }
+      })
+      
       const zohoData = {
         projectId: entryData.jobId,              // Deal ID for Project lookup
         contractorId: contractorId,              // Portal User ID for Contractor lookup
         date: entryData.date,                     // YYYY-MM-DD
         startTime: entryData.startTime,           // HH:MM
         endTime: entryData.endTime,               // HH:MM
-        notes: entryData.notes || '',             // Task_Note
+        lunchStart: entryData.lunchStart || undefined,
+        lunchEnd: entryData.lunchEnd || undefined,
+        totalHours: entryData.totalHours,
+        notes: entryData.notes || '',             // Time_Entry_Note
         timezone: timezone,                       // -07:00 format
+        sundryItems: Object.keys(zohoSundryItems).length > 0 ? zohoSundryItems : undefined,
       }
 
       await zohoClient.createTimeEntry(zohoData)
@@ -195,6 +241,21 @@ export async function retryFailedSyncs(userEmail: string, userId: string): Promi
           notes: entry.notes || '',
           changeOrder: entry.changeOrder || '',
           synced: entry.synced,
+          // Include sundry items from database
+          maskingPaperRoll: entry.maskingPaperRoll,
+          plasticRoll: entry.plasticRoll,
+          puttySpackleTub: entry.puttySpackleTub,
+          caulkTube: entry.caulkTube,
+          whiteTapeRoll: entry.whiteTapeRoll,
+          orangeTapeRoll: entry.orangeTapeRoll,
+          floorPaperRoll: entry.floorPaperRoll,
+          tip: entry.tip,
+          sandingSponge: entry.sandingSponge,
+          inchRollerCover18: entry.inchRollerCover18,
+          inchRollerCover9: entry.inchRollerCover9,
+          miniCover: entry.miniCover,
+          masks: entry.masks,
+          brickTapeRoll: entry.brickTapeRoll,
         }
         await syncToPermanentStorage(entryData, userEmail)
       } catch (error) {

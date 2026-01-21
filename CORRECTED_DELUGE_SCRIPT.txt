@@ -1,0 +1,139 @@
+// CORRECTED DELUGE SCRIPT FOR ZOHO CRM WORKFLOW
+// Copy this entire script and replace your current script in Zoho CRM
+
+// 1. Get Deal Record
+deal = zoho.crm.getRecordById("Deals", dealId);  // 'dealId' passed from workflow
+
+// 2. Guard clause - verify status
+status = deal.get("Stage");
+if (status != "Project Accepted")
+{
+    info "Skipping sync - status is not 'Project Accepted'. Current status: " + status;
+    return;
+}
+
+// 3. Extract Deal fields - only essential fields
+dealIdStr = deal.get("id").toString();
+dealName = deal.get("Deal_Name");
+
+// Get date - prefer Closing_Date, fallback to Project_Start_Date
+dealDate = "";
+if (deal.get("Closing_Date") != null)
+{
+    dealDate = deal.get("Closing_Date");
+}
+else if (deal.get("Project_Start_Date") != null)
+{
+    dealDate = deal.get("Project_Start_Date");
+}
+
+// Get address - prefer Shipping_Street, or combine address fields
+dealAddress = "";
+if (deal.get("Shipping_Street") != null && deal.get("Shipping_Street") != "")
+{
+    dealAddress = deal.get("Shipping_Street");
+}
+else
+{
+    // Combine address components if Shipping_Street is not available
+    street = ifnull(deal.get("Single_Line_1"), "");
+    city = ifnull(deal.get("Single_Line_2"), "");
+    state = ifnull(deal.get("State"), "");
+    zipCode = ifnull(deal.get("Zip_Code"), "");
+    
+    // Build combined address
+    addressParts = list();
+    if (street != "") addressParts.add(street);
+    if (city != "") addressParts.add(city);
+    if (state != "") addressParts.add(state);
+    if (zipCode != "") addressParts.add(zipCode);
+    
+    dealAddress = addressParts.toString(", ");
+}
+
+// 4. Build payload map - only essential fields
+payload = Map();
+payload.put("zoho_record_id", dealIdStr);
+payload.put("name", dealName);
+payload.put("status", status);
+payload.put("date", dealDate);
+payload.put("address", dealAddress);
+payload.put("sync_source", "trigger");
+
+// 5. Get webhook secret from Org Variable
+secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+
+// Debug: Verify secret was retrieved
+if (secret == null || secret == "")
+{
+    info "ERROR: ZOHO_WEBHOOK_SECRET Org Variable is empty or not found!";
+    info "Please verify the Org Variable exists and has a value.";
+    return;
+}
+
+// Trim any whitespace from secret (common issue)
+secret = secret.trim();
+
+// 6. Build headers manually (REQUIRED - do NOT use connection for external APIs)
+headers = Map();
+headers.put("Authorization", "Bearer " + secret);
+headers.put("Content-Type", "application/json");
+
+// 7. Invoke Supabase sync API with manual headers
+url = "https://acom-painting.vercel.app/api/sync/projects/trigger";
+
+// Debug logging
+info "Syncing Deal " + dealIdStr + " to Supabase";
+info "URL: " + url;
+info "Authorization header set (secret length: " + secret.length() + " chars)";
+
+// IMPORTANT: Use 'headers' parameter, NOT 'connection' parameter
+response = invokeurl
+[
+    url: url
+    type: POST
+    parameters: payload.toString()
+    headers: headers
+];
+
+// 8. Log response for audit/debug
+info "Trigger Sync Response for Deal " + dealIdStr + ": " + response;
+
+// 9. Check if sync was successful
+// IMPORTANT: Check for "success":true (not just "success" which matches false too)
+if (response != null && response.contains("\"success\":true"))
+{
+    info "Project " + dealIdStr + " synced successfully to Supabase";
+}
+else
+{
+    // Log error details
+    info "ERROR: Failed to sync project " + dealIdStr;
+    if (response != null)
+    {
+        // Try to extract error reason from response
+        if (response.contains("\"reason\""))
+        {
+            // Extract reason value (simple string extraction)
+            reasonStart = response.indexOf("\"reason\":\"") + 10;
+            reasonEnd = response.indexOf("\"", reasonStart);
+            if (reasonEnd > reasonStart)
+            {
+                reason = response.subString(reasonStart, reasonEnd);
+                info "Error Reason: " + reason;
+            }
+        }
+        if (response.contains("\"details\""))
+        {
+            // Extract details value
+            detailsStart = response.indexOf("\"details\":\"") + 12;
+            detailsEnd = response.indexOf("\"", detailsStart);
+            if (detailsEnd > detailsStart)
+            {
+                details = response.subString(detailsStart, detailsEnd);
+                info "Error Details: " + details;
+            }
+        }
+    }
+    info "Full Response: " + response;
+}

@@ -22,6 +22,11 @@ const timeEntrySchema = z.object({
   totalHours: z.number(),
   notes: z.string().optional(),
   changeOrder: z.string().nullable().optional(),
+  // Add sundry items array
+  sundryItems: z.array(z.object({
+    sundryItem: z.string(),
+    quantity: z.number(),
+  })).optional().default([]),
 })
 
 /**
@@ -113,6 +118,40 @@ export async function POST(request: NextRequest) {
 
     // 4. Prepare entry data
     const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const sundryItems = validated.sundryItems || []
+
+    // Map sundry items to database columns
+    const sundryMap: Record<string, string> = {
+      'Masking Paper Roll': 'maskingPaperRoll',
+      'Plastic Roll': 'plasticRoll',
+      'Putty/Spackle Tub': 'puttySpackleTub',
+      'Caulk Tube': 'caulkTube',
+      'White Tape Roll': 'whiteTapeRoll',
+      'Orange Tape Roll': 'orangeTapeRoll',
+      'Floor Paper Roll': 'floorPaperRoll',
+      'Tip': 'tip',
+      'Sanding Sponge': 'sandingSponge',
+      '18" Roller Cover': 'inchRollerCover18',
+      '9" Roller Cover': 'inchRollerCover9',
+      'Mini Cover': 'miniCover',
+      'Masks': 'masks',
+      'Brick Tape Roll': 'brickTapeRoll',
+    }
+
+    // Initialize all sundry items to "0"
+    const sundryData: Record<string, string> = {}
+    Object.values(sundryMap).forEach(key => {
+      sundryData[key] = '0'
+    })
+
+    // Set quantities from submitted items
+    sundryItems.forEach(item => {
+      const dbKey = sundryMap[item.sundryItem]
+      if (dbKey) {
+        sundryData[dbKey] = String(item.quantity)
+      }
+    })
+
     const entryData = {
       id: entryId,
       userId: validated.userId,
@@ -127,6 +166,8 @@ export async function POST(request: NextRequest) {
       notes: validated.notes || '',
       changeOrder: validated.changeOrder || '',
       synced: false, // Will be updated after Zoho sync
+      // Add all sundry items
+      ...sundryData,
     }
 
     console.log(`[API] Writing entry ${entryId} with date=${entryData.date}`)
@@ -148,11 +189,39 @@ export async function POST(request: NextRequest) {
         notes: entryData.notes,
         changeOrder: entryData.changeOrder,
         synced: entryData.synced,
+        // Add all sundry item fields
+        maskingPaperRoll: entryData.maskingPaperRoll,
+        plasticRoll: entryData.plasticRoll,
+        puttySpackleTub: entryData.puttySpackleTub,
+        caulkTube: entryData.caulkTube,
+        whiteTapeRoll: entryData.whiteTapeRoll,
+        orangeTapeRoll: entryData.orangeTapeRoll,
+        floorPaperRoll: entryData.floorPaperRoll,
+        tip: entryData.tip,
+        sandingSponge: entryData.sandingSponge,
+        inchRollerCover18: entryData.inchRollerCover18,
+        inchRollerCover9: entryData.inchRollerCover9,
+        miniCover: entryData.miniCover,
+        masks: entryData.masks,
+        brickTapeRoll: entryData.brickTapeRoll,
       })
       console.log(`[API] Entry ${entryId} written to Postgres`)
     } catch (dbError: any) {
-      console.error('[API] Postgres write failed:', dbError?.message || dbError)
-      return NextResponse.json({ error: 'Failed to create entry' }, { status: 500 })
+      const errorMsg = dbError?.message || String(dbError)
+      console.error('[API] Postgres write failed:', errorMsg)
+      
+      // Check if it's a connection error
+      if (errorMsg.includes('ENOTFOUND') || errorMsg.includes('getaddrinfo')) {
+        console.error('[API] Database connection error - check DATABASE_URL in Vercel')
+        return NextResponse.json({ 
+          error: 'Database connection failed. Please check server configuration.' 
+        }, { status: 500 })
+      }
+      
+      return NextResponse.json({ 
+        error: 'Failed to create entry',
+        details: process.env.NODE_ENV === 'development' ? errorMsg : undefined
+      }, { status: 500 })
     }
 
     // Store user email and ID in constants for background sync (TypeScript narrowing)

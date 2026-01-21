@@ -192,6 +192,7 @@ export default function NewEntry() {
         notes: notes || "",
         changeOrder: "",
         userId: user.id,
+        sundryItems: sundryItems.filter(item => item.quantity > 0), // Only send items with quantity > 0
       };
 
       const response = await fetch("/api/time-entries", {
