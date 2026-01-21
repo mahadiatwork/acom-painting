@@ -166,8 +166,21 @@ export async function POST(request: NextRequest) {
       notes: validated.notes || '',
       changeOrder: validated.changeOrder || '',
       synced: false, // Will be updated after Zoho sync
-      // Add all sundry items
-      ...sundryData,
+      // Add all sundry items with explicit typing
+      maskingPaperRoll: sundryData.maskingPaperRoll || '0',
+      plasticRoll: sundryData.plasticRoll || '0',
+      puttySpackleTub: sundryData.puttySpackleTub || '0',
+      caulkTube: sundryData.caulkTube || '0',
+      whiteTapeRoll: sundryData.whiteTapeRoll || '0',
+      orangeTapeRoll: sundryData.orangeTapeRoll || '0',
+      floorPaperRoll: sundryData.floorPaperRoll || '0',
+      tip: sundryData.tip || '0',
+      sandingSponge: sundryData.sandingSponge || '0',
+      inchRollerCover18: sundryData.inchRollerCover18 || '0',
+      inchRollerCover9: sundryData.inchRollerCover9 || '0',
+      miniCover: sundryData.miniCover || '0',
+      masks: sundryData.masks || '0',
+      brickTapeRoll: sundryData.brickTapeRoll || '0',
     }
 
     console.log(`[API] Writing entry ${entryId} with date=${entryData.date}`)
