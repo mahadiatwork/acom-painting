@@ -185,6 +185,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`[API] Writing entry ${entryId} with date=${entryData.date}`)
     console.log(`[API] User email: ${user.email}, User ID (Auth): ${user.id}`)
+    
+    // Debug: Log connection string info (sanitized)
+    const dbUrl = process.env.DATABASE_URL || 'NOT SET'
+    const safeDbUrl = dbUrl.replace(/:([^:@]+)@/, ':****@')
+    console.log(`[API] DATABASE_URL (sanitized): ${safeDbUrl}`)
+    
+    // Check if using wrong connection type
+    if (dbUrl.includes('db.') && dbUrl.includes('.supabase.co:5432')) {
+      console.error('[API] ERROR: Using direct connection (db.xxx.supabase.co:5432) instead of pooler!')
+      console.error('[API] Should use: aws-1-us-west-1.pooler.supabase.com:6543')
+    }
 
     // 5. Write to Postgres immediately (blocking)
     try {
@@ -221,19 +232,32 @@ export async function POST(request: NextRequest) {
       console.log(`[API] Entry ${entryId} written to Postgres`)
     } catch (dbError: any) {
       const errorMsg = dbError?.message || String(dbError)
+      const errorCode = dbError?.code || ''
       console.error('[API] Postgres write failed:', errorMsg)
+      console.error('[API] Error code:', errorCode)
+      console.error('[API] Full error:', JSON.stringify(dbError, null, 2))
       
       // Check if it's a connection error
       if (errorMsg.includes('ENOTFOUND') || errorMsg.includes('getaddrinfo')) {
         console.error('[API] Database connection error - check DATABASE_URL in Vercel')
         return NextResponse.json({ 
-          error: 'Database connection failed. Please check server configuration.' 
+          error: 'Database connection failed. Please check server configuration.',
+          details: 'Connection string may be incorrect. Use Connection Pooling URL (port 6543).'
+        }, { status: 500 })
+      }
+      
+      // Check if it's a column doesn't exist error (migration not run)
+      if (errorMsg.includes('column') && (errorMsg.includes('does not exist') || errorCode === '42703')) {
+        console.error('[API] Database column error - SQL migration may not have been run')
+        return NextResponse.json({ 
+          error: 'Database schema error. Please run the SQL migration to add sundry item columns.',
+          details: 'Run ADD_SUNDRY_ITEMS_TO_TIME_ENTRIES.sql in Supabase SQL Editor'
         }, { status: 500 })
       }
       
       return NextResponse.json({ 
         error: 'Failed to create entry',
-        details: process.env.NODE_ENV === 'development' ? errorMsg : undefined
+        details: process.env.NODE_ENV === 'development' ? errorMsg : 'Check server logs for details'
       }, { status: 500 })
     }
 
