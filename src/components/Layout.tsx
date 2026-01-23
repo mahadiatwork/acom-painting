@@ -33,6 +33,8 @@ export function Header({ title, user, onLogout }: { title?: string, user?: strin
             width={48}
             height={32}
             className="h-8 w-auto"
+            unoptimized
+            priority
           />
         </div>
       )}

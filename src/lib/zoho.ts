@@ -202,8 +202,8 @@ class ZohoClient {
       
       const zohoPayload: Record<string, any> = {
         Name: entryName,
-        Job: data.projectId,                    // Lookup field (Deal ID)
-        Portal_User: data.contractorId,         // Lookup field (Portal User ID)
+        Job: { id: data.projectId },                    // Lookup field (Deal ID) - must be object with id
+        Portal_User: { id: data.contractorId },         // Lookup field (Portal User ID) - must be object with id
         Date: data.date,                        // Date field (YYYY-MM-DD)
         Start_Time: startDateTime,               // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)
         End_Time: endDateTime,                  // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)

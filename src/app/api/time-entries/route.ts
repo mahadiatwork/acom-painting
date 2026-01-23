@@ -266,10 +266,12 @@ export async function POST(request: NextRequest) {
     const userId = user.id
 
     // 6. BACKGROUND PATH: Sync to Zoho (non-blocking)
+    // This runs in the background after returning the response to the user
     waitUntil(
       (async () => {
         try {
-          // Sync this entry to Zoho
+          console.log(`[API] Starting background Zoho sync for entry ${entryId} (user: ${userEmail})`)
+          // Sync this entry to Zoho (will lookup zoho_id from users table)
           await syncToPermanentStorage(entryData, userEmail)
           
           // Piggyback recovery: Retry any failed syncs for this user

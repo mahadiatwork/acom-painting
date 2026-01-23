@@ -1,21 +1,25 @@
 "use client"
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { ArrowLeft, Loader2, CheckCircle2, XCircle, Package } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, XCircle, Package, Eye, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getUserTimezoneOffset } from "@/lib/timezone";
 
 export default function TestZohoSync() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [zohoPayload, setZohoPayload] = useState<any>(null);
+  const [loadingZohoId, setLoadingZohoId] = useState(true);
+  const [zohoIdError, setZohoIdError] = useState<string | null>(null);
 
   // Form state
   const [projectId, setProjectId] = useState("6838013000000977057");
-  const [contractorId, setContractorId] = useState("6838013000000977001");
+  const [contractorId, setContractorId] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
@@ -42,11 +46,113 @@ export default function TestZohoSync() {
     Brick_Tape_Roll: 0,
   });
 
+  // Fetch user's zoho_id from Supabase on component mount
+  useEffect(() => {
+    const fetchZohoId = async () => {
+      try {
+        setLoadingZohoId(true);
+        setZohoIdError(null);
+        
+        const response = await fetch("/api/user/zoho-id");
+        const data = await response.json();
+        
+        if (!response.ok) {
+          setZohoIdError(data.message || data.error || "Failed to fetch Zoho ID");
+          toast({
+            title: "Warning",
+            description: data.message || "Could not fetch your Zoho ID. Please enter it manually.",
+            variant: "destructive",
+          });
+        } else if (data.zohoId) {
+          setContractorId(data.zohoId);
+          console.log(`[Test UI] Loaded Zoho ID from Supabase: ${data.zohoId} for ${data.email}`);
+        }
+      } catch (error) {
+        console.error("[Test UI] Failed to fetch zoho_id:", error);
+        setZohoIdError("Failed to fetch Zoho ID. Please enter it manually.");
+        toast({
+          title: "Error",
+          description: "Could not fetch your Zoho ID. Please enter it manually.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingZohoId(false);
+      }
+    };
+
+    fetchZohoId();
+  }, [toast]);
+
   const handleSundryChange = (key: string, value: number) => {
     setSundryItems(prev => ({
       ...prev,
       [key]: Math.max(0, value),
     }));
+  };
+
+  // Build Zoho payload preview (same format as zoho.ts)
+  const buildZohoPayload = () => {
+    const timezone = getUserTimezoneOffset();
+    
+    // Format DateTime helper (same as zoho.ts)
+    const formatZohoDateTime = (date: string, time: string, tz: string): string => {
+      let normalizedTime = time.trim();
+      const isPM = normalizedTime.toUpperCase().includes('PM');
+      const isAM = normalizedTime.toUpperCase().includes('AM');
+      
+      if (isPM || isAM) {
+        normalizedTime = normalizedTime.replace(/[AaPp][Mm]/g, '').trim();
+        const [hours, minutes] = normalizedTime.split(':').map(Number);
+        
+        if (isPM && hours !== 12) {
+          normalizedTime = `${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        } else if (isAM && hours === 12) {
+          normalizedTime = `00:${String(minutes).padStart(2, '0')}`;
+        } else {
+          normalizedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+      }
+      
+      return `${date}T${normalizedTime}:00${tz}`;
+    };
+
+    const startDateTime = formatZohoDateTime(date, startTime, timezone);
+    const endDateTime = formatZohoDateTime(date, endTime, timezone);
+    const entryName = `Time Entry - ${date} ${startTime} to ${endTime}`;
+
+    // Build sundry items object (only include items with quantity > 0)
+    const activeSundryItems: Record<string, number> = {};
+    Object.entries(sundryItems).forEach(([key, value]) => {
+      if (value > 0) {
+        activeSundryItems[key] = value;
+      }
+    });
+
+    const payload: Record<string, any> = {
+      Name: entryName,
+      Job: { id: projectId },                    // Lookup field (Deal ID) - object format
+      Portal_User: { id: contractorId },         // Lookup field (Portal User ID) - object format
+      Date: date,                                // Date field (YYYY-MM-DD)
+      Start_Time: startDateTime,                 // DateTime with timezone
+      End_Time: endDateTime,                     // DateTime with timezone
+      Total_Hours: totalHours,                   // Single Line
+      Time_Entry_Note: notes || '',              // Multi Line (Large)
+    };
+
+    // Add lunch times if provided
+    if (lunchStart && lunchEnd) {
+      payload.Lunch_Start = formatZohoDateTime(date, lunchStart, timezone);
+      payload.Lunch_End = formatZohoDateTime(date, lunchEnd, timezone);
+    }
+
+    // Add sundry items (only if quantity > 0)
+    Object.entries(activeSundryItems).forEach(([apiName, quantity]) => {
+      if (quantity > 0) {
+        payload[apiName] = quantity;
+      }
+    });
+
+    return payload;
   };
 
   const handleSubmit = async () => {
@@ -62,6 +168,10 @@ export default function TestZohoSync() {
         }
       });
 
+      // Build and display Zoho payload
+      const payload = buildZohoPayload();
+      setZohoPayload(payload);
+
       const testData = {
         projectId,
         contractorId,
@@ -76,6 +186,7 @@ export default function TestZohoSync() {
       };
 
       console.log('[Test UI] Sending test data:', testData);
+      console.log('[Test UI] Zoho payload that will be sent:', JSON.stringify(payload, null, 2));
 
       const response = await fetch("/api/test/zoho-sync", {
         method: "POST",
@@ -129,8 +240,8 @@ export default function TestZohoSync() {
         <h1 className="text-lg font-bold">Test Zoho Sync</h1>
       </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-4 md:p-6 xl:p-4 space-y-6 pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+      <main className="flex-1 overflow-y-auto pb-24">
+        <div className="p-4 md:p-6 xl:p-4 space-y-6 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
           
           {/* Info Banner */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -160,14 +271,29 @@ export default function TestZohoSync() {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Contractor ID (Portal User ID) <span className="text-red-500">*</span>
+                  {loadingZohoId && (
+                    <span className="ml-2 text-xs text-gray-500">(Loading from Supabase...)</span>
+                  )}
                 </label>
                 <input
                   type="text"
                   value={contractorId}
                   onChange={(e) => setContractorId(e.target.value)}
                   className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-                  placeholder="6838013000000977001"
+                  placeholder={loadingZohoId ? "Loading..." : "6838013000000977001"}
+                  disabled={loadingZohoId}
                 />
+                {zohoIdError && (
+                  <div className="mt-2 flex items-center text-sm text-amber-600">
+                    <AlertCircle size={16} className="mr-1" />
+                    <span>{zohoIdError}</span>
+                  </div>
+                )}
+                {!loadingZohoId && contractorId && (
+                  <p className="mt-1 text-xs text-green-600">
+                    ✓ Loaded from Supabase users table
+                  </p>
+                )}
               </div>
 
               <div>
@@ -286,7 +412,7 @@ export default function TestZohoSync() {
           </section>
 
           {/* Submit Button */}
-          <section className="pt-4 border-t border-gray-200">
+          <section className="pt-4 pb-6 border-t border-gray-200">
             <PrimaryButton
               onClick={handleSubmit}
               disabled={isSubmitting || !projectId || !contractorId || !startTime || !endTime}
@@ -298,10 +424,32 @@ export default function TestZohoSync() {
                   Testing Zoho Sync...
                 </>
               ) : (
-                "Test Zoho Sync"
+                <>
+                  <Eye className="mr-2 h-5 w-5" />
+                  Show Payload & Test Zoho Sync
+                </>
               )}
             </PrimaryButton>
           </section>
+
+          {/* Zoho Payload Preview */}
+          {zohoPayload && (
+            <section className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center mb-4">
+                <Eye className="text-yellow-700 mr-2" size={24} />
+                <h2 className="text-lg font-bold text-yellow-800">Zoho Payload (What will be sent to Zoho CRM)</h2>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-yellow-200 overflow-x-auto">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono">
+                  {JSON.stringify(zohoPayload, null, 2)}
+                </pre>
+              </div>
+              <p className="text-xs text-yellow-700 mt-3">
+                <strong>Note:</strong> This is the exact payload that will be sent to Zoho CRM API. 
+                Lookup fields (<code className="bg-yellow-100 px-1 rounded">Job</code> and <code className="bg-yellow-100 px-1 rounded">Portal_User</code>) are formatted as objects with <code className="bg-yellow-100 px-1 rounded">id</code> property.
+              </p>
+            </section>
+          )}
 
           {/* Results */}
           {result && (

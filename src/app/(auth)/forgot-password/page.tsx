@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -33,7 +32,7 @@ export default function ForgotPassword() {
             <ArrowLeft size={24} />
           </Link>
           <div className="inline-flex items-center justify-center mb-6">
-            <Image
+            <img
               src="/assets/acomLogo.png"
               alt="ACOM Painting Logo"
               width={160}

@@ -121,17 +121,20 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
 
     // 2. Write to Zoho CRM (UPDATED - correct module, fields, and timezone)
     try {
-      // Lookup Portal User ID from email
+      // Lookup Portal User ID from email (from Supabase users table)
       const contractorId = await getPortalUserIdFromEmail(userEmail)
       
       if (!contractorId) {
         console.warn(`[Sync] Portal User ID not found for ${userEmail}, skipping Zoho sync`)
+        console.warn(`[Sync] Make sure user ${userEmail} exists in users table with zoho_id populated`)
         // If Postgres succeeded, mark as synced
         if (postgresSuccess) {
           await updateSyncedFlag(entryData.id)
         }
         return
       }
+
+      console.log(`[Sync] Found Portal User ID for ${userEmail}: ${contractorId}`)
 
       // Get timezone offset
       const timezone = getUserTimezoneOffset()
@@ -177,9 +180,10 @@ export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail
         sundryItems: Object.keys(zohoSundryItems).length > 0 ? zohoSundryItems : undefined,
       }
 
+      console.log(`[Sync] Sending to Zoho with contractorId: ${contractorId}, projectId: ${entryData.jobId}`)
       await zohoClient.createTimeEntry(zohoData)
       zohoSuccess = true
-      console.log(`[Sync] Written to Zoho: ${entryData.id}`)
+      console.log(`[Sync] Successfully written to Zoho: ${entryData.id}`)
     } catch (zohoError: any) {
       // Zoho sync failure - log but continue
       const errorMessage = zohoError?.message || zohoError?.code || String(zohoError)

@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -58,7 +57,7 @@ export default function Login() {
       <div className="flex flex-col min-h-screen">
         <div className="bg-white py-20 px-8 flex flex-col items-center justify-center">
           <div className="inline-flex items-center justify-center mb-6">
-            <Image
+            <img
               src="/assets/acomLogo.png"
               alt="ACOM Painting Logo"
               width={200}

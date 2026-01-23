@@ -21,6 +21,36 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/time-entries/route.js"
     ],
+    "/(main)/history/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/history/page.js"
+    ],
+    "/(main)/entry/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/entry/[id]/page.js"
+    ],
+    "/(main)/entry/test_new/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/entry/test_new/page.js"
+    ],
+    "/api/test/zoho-sync/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/test/zoho-sync/route.js"
+    ],
+    "/(auth)/login/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(auth)/login/page.js"
+    ],
+    "/api/user/zoho-id/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/user/zoho-id/route.js"
+    ],
     "/(main)/entry/new/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -30,6 +60,11 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/projects/route.js"
+    ],
+    "/(main)/projects/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/projects/page.js"
     ]
   }
 }
