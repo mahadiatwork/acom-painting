@@ -258,14 +258,15 @@ export default function NewEntry() {
               </section>
 
               <section>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h2 className="text-lg font-bold text-gray-800">Crew</h2>
                   <button
                     type="button"
                     onClick={addPainter}
-                    className="flex items-center gap-1 text-primary font-semibold text-sm"
+                    className="flex items-center gap-2 px-4 py-2 rounded-md border-2 border-primary bg-primary/10 text-primary font-semibold text-sm hover:bg-primary/20 transition-colors shrink-0"
+                    aria-label="Add another painter to crew"
                   >
-                    <UserPlus size={18} /> Add painter
+                    <UserPlus size={18} aria-hidden /> Add painter
                   </button>
                 </div>
                 {isLoadingPainters ? (
