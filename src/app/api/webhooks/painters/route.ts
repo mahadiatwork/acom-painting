@@ -65,8 +65,13 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : String(error)
     const stack = error instanceof Error ? error.stack : undefined
     console.error('[Webhook] Painters failed:', message, stack)
+    // When X-Webhook-Debug: true is sent, return the real error so you can see it in Zoho logs
+    const debug = request.headers.get('x-webhook-debug') === 'true' || request.headers.get('x-webhook-debug') === '1'
     return NextResponse.json(
-      { error: 'Internal Server Error', details: process.env.NODE_ENV === 'development' ? message : undefined },
+      {
+        error: 'Internal Server Error',
+        ...(debug && { details: message, hint: 'Fix the issue above then remove X-Webhook-Debug header.' }),
+      },
       { status: 500 }
     )
   }

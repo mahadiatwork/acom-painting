@@ -60,6 +60,8 @@ void automation.Create_painter_in_supabase(int painterId)
 	headers = Map();
 	headers.put("Authorization", "Bearer " + secret.trim());
 	headers.put("Content-Type", "application/json");
+	// Uncomment next line to see the real error in Zoho log when webhook returns 500:
+	// headers.put("X-Webhook-Debug", "true");
 
 	url = "https://acom-painting.vercel.app/api/webhooks/painters";
 

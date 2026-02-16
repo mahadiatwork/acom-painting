@@ -106,13 +106,26 @@ curl -X POST "https://acom-painting.vercel.app/api/webhooks/painters" \
 
 ---
 
+## If the real webhook still returns 500
+
+To see the **exact error** in the Zoho response (so you don’t need Vercel logs):
+
+1. In your Deluge script, add this header before the invokeurl call:
+   ```javascript
+   headers.put("X-Webhook-Debug", "true");
+   ```
+2. Run the workflow again. The 500 response body will include a `details` field with the real error message (e.g. DB connection, missing table, permission).
+3. Fix the issue (e.g. run `CREATE_PAINTERS_TABLE.sql`, fix `DATABASE_URL` in Vercel), then **remove** the `X-Webhook-Debug` header.
+
+---
+
 ## Quick checklist
 
 | Check | Action |
 |-------|--------|
 | Echo test 200 and `parsed` looks correct | Server receives valid JSON; if not, fix Zoho to use `body : jsonBody`. |
 | Real webhook 401 | Fix `ZOHO_WEBHOOK_SECRET` (same in Vercel and Zoho). |
-| Real webhook 500 | Run `CREATE_PAINTERS_TABLE.sql` in Supabase; check Vercel logs for the exact error. |
+| Real webhook 500 | Add header `X-Webhook-Debug: true`, run again, read `details` in response; or check Vercel logs. Ensure `painters` table exists and `DATABASE_URL` is set. |
 | Real webhook 400 | Ensure JSON has `id` and `Name` (and correct escaping in Deluge). |
 
 ---
