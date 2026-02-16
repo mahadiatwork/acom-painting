@@ -434,6 +434,27 @@ if (totalErrors > 0)
 
 **Required fields on Painters module**: `Name` (required), `Email`, `Phone`, `Active` (checkbox/boolean). Adjust field API names below if yours differ (e.g. `Full_Name` instead of `Name`).
 
+### Quick fix if you see 500 (body must be JSON, not a Map)
+
+If your script uses a **Map** and **`parameters: dataMap.toString()`**, the webhook gets invalid data and returns 500. Replace that with a **JSON string**:
+
+**Remove** the block that builds `dataMap` (e.g. `dataMap = Map(); dataMap.put("id", idStr);` …).
+
+**Add** instead (after you have `idStr`, `nameVal`, `emailVal`, `phoneVal`, `activeVal`):
+
+```javascript
+// Escape double quotes for JSON
+nameStr = nameVal.replace("\"", "\\\"");
+emailStr = (emailVal != null ? emailVal.toString() : "").replace("\"", "\\\"");
+phoneStr = (phoneVal != null ? phoneVal.toString() : "").replace("\"", "\\\"");
+activeJson = (activeVal == true || activeVal == 1 || activeVal == "1") ? "true" : "false";
+jsonBody = "{\"id\":\"" + idStr + "\",\"Name\":\"" + nameStr + "\",\"Email\":\"" + emailStr + "\",\"Phone\":\"" + phoneStr + "\",\"Active\":" + activeJson + "}";
+```
+
+Then in **invokeurl** use **`body: jsonBody`** (not `parameters` — parameters sends form data, not raw JSON).
+
+---
+
 ### Deluge Script
 
 ```javascript
@@ -492,8 +513,8 @@ headers.put("Authorization", "Bearer " + secret);
 headers.put("Content-Type", "application/json");
 
 // 8. Call webhook
-// IMPORTANT: Use parameters: jsonBody (the JSON string built above). Do NOT use a Map
-// or dataMap.toString() — that sends invalid text and the API will return 400 Invalid JSON.
+// IMPORTANT: Use body: jsonBody (raw JSON). Do NOT use parameters — that sends form data,
+// not JSON. Do NOT use a Map or dataMap.toString().
 url = "https://acom-painting.vercel.app/api/webhooks/painters";
 
 info "Syncing Painter " + idStr + " to Supabase";
@@ -502,7 +523,7 @@ response = invokeurl
 [
     url: url
     type: POST
-    parameters: jsonBody
+    body: jsonBody
     headers: headers
 ];
 

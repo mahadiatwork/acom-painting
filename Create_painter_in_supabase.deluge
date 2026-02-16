@@ -1,0 +1,88 @@
+void automation.Create_painter_in_supabase(int painterId)
+{
+	// 1. Get Painter record
+	rec = zoho.crm.getRecordById("Painters", painterId);
+
+	if(rec == null || rec.isEmpty())
+	{
+		info "ERROR: Painter not found";
+		return;
+	}
+
+	// 2. Extract fields
+	idStr = rec.get("id").toString();
+	nameVal = ifnull(rec.get("Name"), "");
+	emailVal = ifnull(rec.get("Email"), "");
+	phoneVal = ifnull(rec.get("Phone"), "");
+	activeVal = rec.get("Active");
+
+	// 3. Normalize Active boolean
+	activeBool = false;
+	if(activeVal == true || activeVal == 1 || activeVal == "1")
+	{
+		activeBool = true;
+	}
+
+	// 4. Escape double quotes for JSON (so name/email/phone with " don't break JSON)
+	nameStr = nameVal.replace("\"", "\\\"");
+	emailStr = "";
+	if(emailVal != null && emailVal != "")
+	{
+		emailStr = emailVal.toString().replace("\"", "\\\"");
+	}
+	phoneStr = "";
+	if(phoneVal != null && phoneVal != "")
+	{
+		phoneStr = phoneVal.toString().replace("\"", "\\\"");
+	}
+	if(activeBool)
+	{
+		activeJson = "true";
+	}
+	else
+	{
+		activeJson = "false";
+	}
+
+	// 5. Build JSON body string (required: API expects valid JSON, not Map.toString())
+	jsonBody = "{\"id\":\"" + idStr + "\",\"Name\":\"" + nameStr + "\",\"Email\":\"" + emailStr + "\",\"Phone\":\"" + phoneStr + "\",\"Active\":" + activeJson + "}";
+
+	// 6. Get Org Variable
+	secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+
+	if(secret == null || secret.trim() == "")
+	{
+		info "ERROR: Missing ZOHO_WEBHOOK_SECRET";
+		return;
+	}
+
+	// 7. Headers
+	headers = Map();
+	headers.put("Authorization", "Bearer " + secret.trim());
+	headers.put("Content-Type", "application/json");
+
+	url = "https://acom-painting.vercel.app/api/webhooks/painters";
+
+	info "Syncing Painter " + idStr;
+
+	// 8. Invoke Webhook — send raw JSON with body (not parameters; parameters = form data)
+	response = invokeurl
+	[
+		url : url
+		type : POST
+		body : jsonBody
+		headers : headers
+	];
+
+	info response;
+
+	// 9. Validate response (invokeurl often returns string; success is in JSON body)
+	if(response != null && (response.contains("\"success\":true") || (response.get("success") == true)))
+	{
+		info "SUCCESS: Painter synced";
+	}
+	else
+	{
+		info "ERROR: Sync failed - " + response;
+	}
+}
