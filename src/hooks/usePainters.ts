@@ -11,11 +11,15 @@ export function usePainters() {
   return useQuery<Painter[]>({
     queryKey: ['painters'],
     queryFn: async () => {
-      const res = await fetch('/api/painters')
-      if (!res.ok) throw new Error('Failed to fetch painters')
-      const data = await res.json()
+      const res = await fetch('/api/painters', { credentials: 'include' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = data?.error || `Failed to fetch painters (${res.status})`
+        throw new Error(msg)
+      }
       return Array.isArray(data) ? data : []
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
   })
 }

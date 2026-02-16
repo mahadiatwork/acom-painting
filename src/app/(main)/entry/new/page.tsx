@@ -83,7 +83,7 @@ export default function NewEntry() {
   const [sundryItems, setSundryItems] = useState<SundryItem[]>([])
 
   const { data: projects, isLoading: isLoadingProjects } = useProjects()
-  const { data: paintersList = [], isLoading: isLoadingPainters } = usePainters()
+  const { data: paintersList = [], isLoading: isLoadingPainters, isError: isPaintersError } = usePainters()
 
   const addPainter = () => setPainters((prev) => [...prev, emptyPainterRow()])
   const removePainter = (index: number) => {
@@ -272,7 +272,18 @@ export default function NewEntry() {
                 {isLoadingPainters ? (
                   <div className="p-4 border rounded-lg bg-gray-50 text-gray-500">Loading painters...</div>
                 ) : (
-                  <div className="space-y-4">
+                  <>
+                    {isPaintersError && (
+                      <div className="p-4 mb-4 border rounded-lg bg-amber-50 border-amber-200 text-amber-800 text-sm">
+                        Could not load painters. Make sure you’re logged in and try refreshing the page.
+                      </div>
+                    )}
+                    {!isPaintersError && paintersList.length === 0 && (
+                      <div className="p-4 mb-4 border rounded-lg bg-gray-50 text-gray-600 text-sm">
+                        No painters in list. Add painters in Zoho (they sync here) or run the seed script in Supabase. Ensure this app uses the same Supabase project (roofworx-timesheet-app).
+                      </div>
+                    )}
+                    <div className="space-y-4">
                     {painters.map((row, index) => (
                       <div key={index} className="p-4 rounded-lg border border-gray-200 bg-gray-50/50 space-y-3">
                         <div className="flex justify-between items-center">
@@ -344,6 +355,7 @@ export default function NewEntry() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </section>
 
