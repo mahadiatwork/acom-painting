@@ -137,6 +137,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/(main)/test/painters/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/test/painters">> = Specific
+  const handler = {} as typeof import("../../src/app/(main)/test/painters/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/auth/provision/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/auth/provision">> = Specific
@@ -218,10 +227,28 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/webhooks/painters/db-check/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/painters/db-check">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/painters/db-check/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/webhooks/painters/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/painters">> = Specific
   const handler = {} as typeof import("../../src/app/api/webhooks/painters/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/webhooks/painters/test/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/painters/test">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/painters/test/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

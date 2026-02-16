@@ -7,8 +7,10 @@ export const dynamic = 'force-dynamic'
  * GET /api/painters
  * Returns all active painters for the Foreman's crew dropdown.
  * Reads from Supabase (same DB the webhook writes to).
- * No auth check here so the list loads reliably in Route Handlers (session cookies
- * are not always available). The entry page itself is protected by middleware.
+ *
+ * PGRST205 "Could not find the table 'public.painters'" = NEXT_PUBLIC_SUPABASE_URL
+ * (and SUPABASE_SERVICE_ROLE_KEY) point to a project that has no painters table.
+ * Use the same Supabase project where you created the table (e.g. roofworx-timesheet-app).
  */
 export async function GET() {
   try {
