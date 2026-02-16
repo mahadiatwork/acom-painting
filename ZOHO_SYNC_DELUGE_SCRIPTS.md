@@ -492,6 +492,8 @@ headers.put("Authorization", "Bearer " + secret);
 headers.put("Content-Type", "application/json");
 
 // 8. Call webhook
+// IMPORTANT: Use parameters: jsonBody (the JSON string built above). Do NOT use a Map
+// or dataMap.toString() — that sends invalid text and the API will return 400 Invalid JSON.
 url = "https://acom-painting.vercel.app/api/webhooks/painters";
 
 info "Syncing Painter " + idStr + " to Supabase";
