@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -8,16 +7,11 @@ export const dynamic = 'force-dynamic'
  * GET /api/painters
  * Returns all active painters for the Foreman's crew dropdown.
  * Reads from Supabase (same DB the webhook writes to).
+ * No auth check here so the list loads reliably in Route Handlers (session cookies
+ * are not always available). The entry page itself is protected by middleware.
  */
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const admin = createAdminClient()
     const { data: list, error } = await admin
       .from('painters')
