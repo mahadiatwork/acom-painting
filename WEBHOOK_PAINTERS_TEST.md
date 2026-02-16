@@ -106,6 +106,17 @@ curl -X POST "https://acom-painting.vercel.app/api/webhooks/painters" \
 
 ---
 
+## "The table exists" but error says "relation painters does not exist"
+
+The app is using a **different database** than the one where you created the table.
+
+1. **See which DB the app uses** (after deploy): call `GET .../api/webhooks/painters/db-check` with header `Authorization: Bearer YOUR_SECRET`. Note the `databaseHost` in the response.
+2. In **Supabase**, open the project where you see the `painters` table → **Project Settings → Database**. Note the **Host**.
+3. **If they differ:** In **Vercel → Settings → Environment Variables**, set **DATABASE_URL** to the connection string from **that same** Supabase project. Redeploy.
+4. Run the Zoho workflow again.
+
+---
+
 ## If the real webhook still returns 500
 
 To see the **exact error** in the Zoho response (so you don’t need Vercel logs):

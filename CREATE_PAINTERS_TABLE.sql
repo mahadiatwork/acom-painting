@@ -1,6 +1,9 @@
 -- Create painters table (required for /api/webhooks/painters)
--- Run this in Supabase SQL Editor if the painters webhook returns 500.
--- If the table already exists, these statements are safe (IF NOT EXISTS).
+-- ERROR "relation painters does not exist" = run this in Supabase.
+--
+-- CRITICAL: Use the SAME Supabase project that Vercel uses.
+-- Vercel → Settings → Environment Variables → DATABASE_URL has a host like
+--   ...supabase.com or pooler.supabase.com. Open THAT project in Supabase, then run this.
 
 CREATE TABLE IF NOT EXISTS painters (
   id          VARCHAR PRIMARY KEY,
@@ -14,3 +17,5 @@ CREATE TABLE IF NOT EXISTS painters (
 
 CREATE INDEX IF NOT EXISTS painters_name_idx   ON painters (name);
 CREATE INDEX IF NOT EXISTS painters_active_idx ON painters (active);
+
+-- After running: Table Editor → painters should appear. Or run: SELECT * FROM painters LIMIT 1;
