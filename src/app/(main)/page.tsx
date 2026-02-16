@@ -87,7 +87,7 @@ export default function Dashboard() {
           <Link href="/entry/new">
             <PrimaryButton className="h-16 text-lg shadow-lg flex items-center justify-center gap-2">
               <Plus size={24} strokeWidth={3} />
-              New Time Entry
+              New Timesheet
             </PrimaryButton>
           </Link>
         </section>
@@ -98,7 +98,7 @@ export default function Dashboard() {
             <div className="absolute top-0 right-0 p-3 opacity-10">
               <Clock size={100} />
             </div>
-            <h3 className="text-gray-300 text-sm font-medium uppercase tracking-wider mb-1">Hours This Week</h3>
+            <h3 className="text-gray-300 text-sm font-medium uppercase tracking-wider mb-1">Crew Hours This Week</h3>
             {isLoadingHours ? (
               <div className="h-16 w-24 bg-white/20 rounded animate-pulse"></div>
             ) : (
@@ -110,7 +110,7 @@ export default function Dashboard() {
         {/* Recent History */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-heading text-lg font-bold text-gray-800">Recent Entries</h3>
+            <h3 className="font-heading text-lg font-bold text-gray-800">Recent Timesheets</h3>
             <Link href="/history" className="text-primary text-sm font-semibold flex items-center">
               View All <ChevronRight size={16} />
             </Link>
@@ -132,7 +132,7 @@ export default function Dashboard() {
               </>
             ) : recentEntries.length === 0 ? (
               <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm text-center text-gray-500">
-                No entries yet. Create your first time entry!
+                No timesheets yet. Create your first timesheet!
               </div>
             ) : (
               recentEntries.map((entry) => (
@@ -146,7 +146,13 @@ export default function Dashboard() {
                     <div className="flex items-center text-gray-500 text-xs mt-1 gap-2">
                       <span className="flex items-center gap-1"><CalendarDays size={12} /> {entry.date}</span>
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                      <span className="font-mono">{entry.totalHours} hrs</span>
+                      <span className="font-mono">{entry.totalCrewHours ?? 0} hrs</span>
+                      {(entry.painters?.length ?? 0) > 0 && (
+                        <>
+                          <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                          <span>{(entry.painters?.length ?? 0)} painter{(entry.painters?.length ?? 0) === 1 ? "" : "s"}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-primary">

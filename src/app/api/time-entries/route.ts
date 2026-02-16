@@ -1,172 +1,193 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createClient } from '@/lib/supabase/server'
-import { syncToPermanentStorage, retryFailedSyncs } from '@/lib/sync-utils'
+import { syncTimesheetToZoho, retryFailedSyncs } from '@/lib/sync-utils'
 import { db } from '@/lib/db'
-import { timeEntries } from '@/lib/schema'
-import { eq, and, sql } from 'drizzle-orm'
+import { timeEntries, timesheetPainters } from '@/lib/schema'
+import { eq, and, sql, desc } from 'drizzle-orm'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-// Schema for entry validation
-const timeEntrySchema = z.object({
-  jobId: z.string(),
-  jobName: z.string(),
-  userId: z.string(),
-  date: z.string().optional(), // Will default to today if not provided
+const painterRowSchema = z.object({
+  painterId: z.string(),
+  painterName: z.string(),
   startTime: z.string(),
   endTime: z.string(),
-  lunchStart: z.string().optional(),
-  lunchEnd: z.string().optional(),
-  totalHours: z.number(),
-  notes: z.string().optional(),
-  changeOrder: z.string().nullable().optional(),
-  // Add sundry items array
+  lunchStart: z.string().optional().default(''),
+  lunchEnd: z.string().optional().default(''),
+})
+
+const timesheetSchema = z.object({
+  jobId: z.string(),
+  jobName: z.string(),
+  date: z.string().optional(),
+  notes: z.string().optional().default(''),
+  changeOrder: z.string().nullable().optional().default(''),
   sundryItems: z.array(z.object({
     sundryItem: z.string(),
     quantity: z.number(),
   })).optional().default([]),
+  painters: z.array(painterRowSchema).min(1, 'At least one painter is required'),
 })
+
+function parseTimeToMinutes(time: string): number {
+  if (!time) return 0
+  const [h, m] = time.split(':').map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
+function computeTotalHours(start: string, end: string, lunchStart: string, lunchEnd: string): number {
+  const startM = parseTimeToMinutes(start)
+  const endM = parseTimeToMinutes(end)
+  let workM = endM - startM
+  if (lunchStart && lunchEnd) {
+    const lunchM = parseTimeToMinutes(lunchEnd) - parseTimeToMinutes(lunchStart)
+    if (lunchM > 0) workM -= lunchM
+  }
+  return workM > 0 ? Number((workM / 60).toFixed(2)) : 0
+}
+
+const SUNDRY_MAP: Record<string, string> = {
+  'Masking Paper Roll': 'maskingPaperRoll',
+  'Plastic Roll': 'plasticRoll',
+  'Putty/Spackle Tub': 'puttySpackleTub',
+  'Caulk Tube': 'caulkTube',
+  'White Tape Roll': 'whiteTapeRoll',
+  'Orange Tape Roll': 'orangeTapeRoll',
+  'Floor Paper Roll': 'floorPaperRoll',
+  'Tip': 'tip',
+  'Sanding Sponge': 'sandingSponge',
+  '18" Roller Cover': 'inchRollerCover18',
+  '9" Roller Cover': 'inchRollerCover9',
+  'Mini Cover': 'miniCover',
+  'Masks': 'masks',
+  'Brick Tape Roll': 'brickTapeRoll',
+}
 
 /**
  * GET /api/time-entries
- * Returns user's time entries from Postgres
+ * Returns foreman's timesheets with nested painters.
  */
 export async function GET(request: NextRequest) {
   try {
-    // 1. Authenticate User
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user || !user.email) {
+    if (!user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 2. Check for date range query (optional)
     const { searchParams } = new URL(request.url)
-    const daysBack = searchParams.get('days') ? parseInt(searchParams.get('days')!) : 30
-    
-    // Calculate date cutoff for Postgres query
+    const daysBack = searchParams.get('days') ? parseInt(searchParams.get('days')!, 10) : 30
     const cutoffDate = new Date()
     cutoffDate.setUTCDate(cutoffDate.getUTCDate() - daysBack)
     cutoffDate.setUTCHours(0, 0, 0, 0)
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0]
-    
-    console.log(`[API] Fetching entries for ${user.email}, days=${daysBack}, date >= ${cutoffDateStr}`)
-    console.log(`[API] User email: ${user.email}, User ID (Auth): ${user.id}`)
-    
-    // 3. Query Postgres directly
-    try {
-      const postgresEntries = await db
+
+    const rows = await db
+      .select()
+      .from(timeEntries)
+      .where(and(
+        eq(timeEntries.userId, user.id),
+        sql`${timeEntries.date} >= ${cutoffDateStr}`
+      ))
+      .orderBy(desc(timeEntries.date))
+
+    const entries: any[] = []
+    for (const te of rows) {
+      const painterRows = await db
         .select()
-        .from(timeEntries)
-        .where(and(
-          eq(timeEntries.userId, user.id),
-          sql`${timeEntries.date} >= ${cutoffDateStr}`
-        ))
-        .orderBy(timeEntries.date)
-
-      console.log(`[API] Found ${postgresEntries.length} entries in Postgres for user ${user.id}`)
-
-      const entries = postgresEntries.map(e => ({
-        ...e,
-        totalHours: parseFloat(e.totalHours),
-        synced: e.synced,
+        .from(timesheetPainters)
+        .where(eq(timesheetPainters.timesheetId, te.id))
+      const painters = painterRows.map(p => ({
+        id: p.id,
+        painterId: p.painterId,
+        painterName: p.painterName,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        lunchStart: p.lunchStart || '',
+        lunchEnd: p.lunchEnd || '',
+        totalHours: parseFloat(p.totalHours),
+        zohoJunctionId: p.zohoJunctionId,
       }))
-
-      // Sort by date (newest first)
-      entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-      console.log(`[API] Returning ${entries.length} total entries for ${user.email}`)
-      if (entries.length > 0) {
-        console.log(`[API] First entry sample:`, { id: entries[0].id, date: entries[0].date, jobName: entries[0].jobName })
+      const sundry: Record<string, string> = {
+        maskingPaperRoll: te.maskingPaperRoll ?? '0',
+        plasticRoll: te.plasticRoll ?? '0',
+        puttySpackleTub: te.puttySpackleTub ?? '0',
+        caulkTube: te.caulkTube ?? '0',
+        whiteTapeRoll: te.whiteTapeRoll ?? '0',
+        orangeTapeRoll: te.orangeTapeRoll ?? '0',
+        floorPaperRoll: te.floorPaperRoll ?? '0',
+        tip: te.tip ?? '0',
+        sandingSponge: te.sandingSponge ?? '0',
+        inchRollerCover18: te.inchRollerCover18 ?? '0',
+        inchRollerCover9: te.inchRollerCover9 ?? '0',
+        miniCover: te.miniCover ?? '0',
+        masks: te.masks ?? '0',
+        brickTapeRoll: te.brickTapeRoll ?? '0',
       }
-
-      return NextResponse.json(entries)
-    } catch (dbError: any) {
-      const errorMessage = dbError?.message || dbError?.code || String(dbError)
-      console.error('[API] Postgres query failed:', errorMessage)
-      return NextResponse.json({ error: 'Failed to fetch entries' }, { status: 500 })
+      entries.push({
+        ...te,
+        totalCrewHours: parseFloat(te.totalCrewHours ?? '0'),
+        painters,
+        sundryItems: sundry,
+      })
     }
+
+    return NextResponse.json(entries)
   } catch (error) {
-    console.error('[API] Failed to fetch entries:', error)
+    console.error('[API] Failed to fetch time entries:', error)
     return NextResponse.json({ error: 'Failed to fetch entries' }, { status: 500 })
   }
 }
 
 /**
  * POST /api/time-entries
- * Write to Postgres first, then background sync to Zoho
+ * Create timesheet (parent + painters) in Postgres, then background sync to Zoho.
  */
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate User
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user || !user.email) {
+    if (!user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 2. Parse and validate payload
     const payload = await request.json()
-    const validated = timeEntrySchema.parse(payload)
+    const validated = timesheetSchema.parse(payload)
+    const today = new Date().toISOString().split('T')[0]
+    const date = validated.date || today
 
-    // 3. Generate UUID for entry
-    const entryId = crypto.randomUUID()
+    const paintersWithHours = validated.painters.map(p => {
+      const totalHours = computeTotalHours(p.startTime, p.endTime, p.lunchStart || '', p.lunchEnd || '')
+      return { ...p, totalHours: String(totalHours) }
+    })
+    const totalCrewHours = paintersWithHours.reduce((sum, p) => sum + parseFloat(p.totalHours), 0)
 
-    // 4. Prepare entry data
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-    const sundryItems = validated.sundryItems || []
-
-    // Map sundry items to database columns
-    const sundryMap: Record<string, string> = {
-      'Masking Paper Roll': 'maskingPaperRoll',
-      'Plastic Roll': 'plasticRoll',
-      'Putty/Spackle Tub': 'puttySpackleTub',
-      'Caulk Tube': 'caulkTube',
-      'White Tape Roll': 'whiteTapeRoll',
-      'Orange Tape Roll': 'orangeTapeRoll',
-      'Floor Paper Roll': 'floorPaperRoll',
-      'Tip': 'tip',
-      'Sanding Sponge': 'sandingSponge',
-      '18" Roller Cover': 'inchRollerCover18',
-      '9" Roller Cover': 'inchRollerCover9',
-      'Mini Cover': 'miniCover',
-      'Masks': 'masks',
-      'Brick Tape Roll': 'brickTapeRoll',
-    }
-
-    // Initialize all sundry items to "0"
     const sundryData: Record<string, string> = {}
-    Object.values(sundryMap).forEach(key => {
-      sundryData[key] = '0'
+    Object.values(SUNDRY_MAP).forEach(k => { sundryData[k] = '0' })
+    ;(validated.sundryItems || []).forEach(item => {
+      const key = SUNDRY_MAP[item.sundryItem]
+      if (key) sundryData[key] = String(item.quantity)
     })
 
-    // Set quantities from submitted items
-    sundryItems.forEach(item => {
-      const dbKey = sundryMap[item.sundryItem]
-      if (dbKey) {
-        sundryData[dbKey] = String(item.quantity)
-      }
-    })
+    const timesheetId = crypto.randomUUID()
 
-    const entryData = {
-      id: entryId,
-      userId: validated.userId,
+    const parentValues = {
+      id: timesheetId,
+      userId: user.id,
       jobId: validated.jobId,
       jobName: validated.jobName,
-      date: validated.date || today,
-      startTime: validated.startTime,
-      endTime: validated.endTime,
-      lunchStart: validated.lunchStart || '',
-      lunchEnd: validated.lunchEnd || '',
-      totalHours: String(validated.totalHours),
+      date,
+      startTime: '',
+      endTime: '',
+      lunchStart: '',
+      lunchEnd: '',
+      totalHours: '0',
       notes: validated.notes || '',
       changeOrder: validated.changeOrder || '',
-      synced: false, // Will be updated after Zoho sync
-      // Add all sundry items with explicit typing
+      synced: false,
+      totalCrewHours: String(totalCrewHours),
       maskingPaperRoll: sundryData.maskingPaperRoll || '0',
       plasticRoll: sundryData.plasticRoll || '0',
       puttySpackleTub: sundryData.puttySpackleTub || '0',
@@ -183,127 +204,102 @@ export async function POST(request: NextRequest) {
       brickTapeRoll: sundryData.brickTapeRoll || '0',
     }
 
-    console.log(`[API] Writing entry ${entryId} with date=${entryData.date}`)
-    console.log(`[API] User email: ${user.email}, User ID (Auth): ${user.id}`)
-    
-    // Debug: Log connection string info (sanitized)
-    const dbUrl = process.env.DATABASE_URL || 'NOT SET'
-    const safeDbUrl = dbUrl.replace(/:([^:@]+)@/, ':****@')
-    console.log(`[API] DATABASE_URL (sanitized): ${safeDbUrl}`)
-    
-    // Check if using wrong connection type
-    if (dbUrl.includes('db.') && dbUrl.includes('.supabase.co:5432')) {
-      console.error('[API] ERROR: Using direct connection (db.xxx.supabase.co:5432) instead of pooler!')
-      console.error('[API] Should use: aws-1-us-west-1.pooler.supabase.com:6543')
-    }
-
-    // 5. Write to Postgres immediately (blocking)
     try {
-      await db.insert(timeEntries).values({
-        id: entryData.id,
-        userId: entryData.userId,
-        jobId: entryData.jobId,
-        jobName: entryData.jobName,
-        date: entryData.date,
-        startTime: entryData.startTime,
-        endTime: entryData.endTime,
-        lunchStart: entryData.lunchStart,
-        lunchEnd: entryData.lunchEnd,
-        totalHours: entryData.totalHours,
-        notes: entryData.notes,
-        changeOrder: entryData.changeOrder,
-        synced: entryData.synced,
-        // Add all sundry item fields
-        maskingPaperRoll: entryData.maskingPaperRoll,
-        plasticRoll: entryData.plasticRoll,
-        puttySpackleTub: entryData.puttySpackleTub,
-        caulkTube: entryData.caulkTube,
-        whiteTapeRoll: entryData.whiteTapeRoll,
-        orangeTapeRoll: entryData.orangeTapeRoll,
-        floorPaperRoll: entryData.floorPaperRoll,
-        tip: entryData.tip,
-        sandingSponge: entryData.sandingSponge,
-        inchRollerCover18: entryData.inchRollerCover18,
-        inchRollerCover9: entryData.inchRollerCover9,
-        miniCover: entryData.miniCover,
-        masks: entryData.masks,
-        brickTapeRoll: entryData.brickTapeRoll,
-      })
-      console.log(`[API] Entry ${entryId} written to Postgres`)
+      await db.insert(timeEntries).values(parentValues)
+      const junctionRows = paintersWithHours.map(p => ({
+        timesheetId,
+        painterId: p.painterId,
+        painterName: p.painterName,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        lunchStart: p.lunchStart || '',
+        lunchEnd: p.lunchEnd || '',
+        totalHours: p.totalHours,
+      }))
+      if (junctionRows.length > 0) {
+        await db.insert(timesheetPainters).values(junctionRows)
+      }
     } catch (dbError: any) {
-      const errorMsg = dbError?.message || String(dbError)
-      const errorCode = dbError?.code || ''
-      console.error('[API] Postgres write failed:', errorMsg)
-      console.error('[API] Error code:', errorCode)
-      console.error('[API] Full error:', JSON.stringify(dbError, null, 2))
-      
-      // Check if it's a connection error
-      if (errorMsg.includes('ENOTFOUND') || errorMsg.includes('getaddrinfo')) {
-        console.error('[API] Database connection error - check DATABASE_URL in Vercel')
-        return NextResponse.json({ 
-          error: 'Database connection failed. Please check server configuration.',
-          details: 'Connection string may be incorrect. Use Connection Pooling URL (port 6543).'
+      const msg = dbError?.message || String(dbError)
+      console.error('[API] Postgres write failed:', msg)
+      if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
+        return NextResponse.json({
+          error: 'Database connection failed.',
+          details: 'Use Connection Pooling URL (port 6543).',
         }, { status: 500 })
       }
-      
-      // Check if it's a column doesn't exist error (migration not run)
-      if (errorMsg.includes('column') && (errorMsg.includes('does not exist') || errorCode === '42703')) {
-        console.error('[API] Database column error - SQL migration may not have been run')
-        return NextResponse.json({ 
-          error: 'Database schema error. Please run the SQL migration to add sundry item columns.',
-          details: 'Run ADD_SUNDRY_ITEMS_TO_TIME_ENTRIES.sql in Supabase SQL Editor'
+      if (msg.includes('column') && (msg.includes('does not exist') || dbError?.code === '42703')) {
+        return NextResponse.json({
+          error: 'Database schema error. Run FOREMAN_MIGRATION_PHASE1.sql in Supabase.',
         }, { status: 500 })
       }
-      
-      return NextResponse.json({ 
-        error: 'Failed to create entry',
-        details: process.env.NODE_ENV === 'development' ? errorMsg : 'Check server logs for details'
-      }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to create timesheet', details: msg }, { status: 500 })
     }
 
-    // Store user email and ID in constants for background sync (TypeScript narrowing)
+    const insertedPainters = await db.select().from(timesheetPainters).where(eq(timesheetPainters.timesheetId, timesheetId))
+    const paintersForSync = insertedPainters.map(p => ({
+      id: p.id,
+      painterId: p.painterId,
+      painterName: p.painterName,
+      startTime: p.startTime,
+      endTime: p.endTime,
+      lunchStart: p.lunchStart || '',
+      lunchEnd: p.lunchEnd || '',
+      totalHours: p.totalHours,
+      zohoJunctionId: undefined as string | undefined,
+    }))
+
+    const timesheetData = {
+      id: timesheetId,
+      userId: user.id,
+      jobId: validated.jobId,
+      jobName: validated.jobName,
+      date,
+      notes: validated.notes,
+      changeOrder: validated.changeOrder ?? undefined,
+      synced: false,
+      zohoTimeEntryId: undefined as string | undefined,
+      totalCrewHours: String(totalCrewHours),
+      painters: paintersForSync,
+      ...sundryData,
+    }
+
     const userEmail = user.email
     const userId = user.id
-
-    // 6. BACKGROUND PATH: Sync to Zoho (non-blocking)
-    // This runs in the background after returning the response to the user
     waitUntil(
       (async () => {
         try {
-          console.log(`[API] Starting background Zoho sync for entry ${entryId} (user: ${userEmail})`)
-          // Sync this entry to Zoho (will lookup zoho_id from users table)
-          await syncToPermanentStorage(entryData, userEmail)
-          
-          // Piggyback recovery: Retry any failed syncs for this user
+          await syncTimesheetToZoho(timesheetData, userEmail)
           await retryFailedSyncs(userEmail, userId)
-        } catch (error) {
-          console.error('[API] Background sync error:', error)
-          // Don't throw - this is background processing
+        } catch (e) {
+          console.error('[API] Background sync error:', e)
         }
       })()
     )
 
-    // 7. Return immediately (user doesn't wait for Zoho sync)
-    return NextResponse.json(
-      {
-        ...entryData,
-        totalHours: validated.totalHours, // Convert back to number from string
-      },
-      { status: 201 }
-    )
+    return NextResponse.json({
+      id: timesheetId,
+      jobId: validated.jobId,
+      jobName: validated.jobName,
+      date,
+      notes: validated.notes,
+      totalCrewHours,
+      synced: false,
+      painters: paintersWithHours.map(p => ({
+        painterId: p.painterId,
+        painterName: p.painterName,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        lunchStart: p.lunchStart,
+        lunchEnd: p.lunchEnd,
+        totalHours: parseFloat(p.totalHours),
+      })),
+    }, { status: 201 })
   } catch (error) {
-    console.error('[API] Failed to create entry:', error)
-    
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid payload', details: error.errors },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid payload', details: error.errors }, { status: 400 })
     }
-
-    return NextResponse.json(
-      { error: 'Failed to create entry' },
-      { status: 500 }
-    )
+    console.error('[API] Failed to create timesheet:', error)
+    return NextResponse.json({ error: 'Failed to create timesheet' }, { status: 500 })
   }
 }

@@ -1,24 +1,33 @@
 import { db } from '@/lib/db'
-import { timeEntries, users } from '@/lib/schema'
+import { timeEntries, timesheetPainters, users } from '@/lib/schema'
 import { zohoClient } from '@/lib/zoho'
 import { getUserTimezoneOffset } from '@/lib/timezone'
 import { eq, and } from 'drizzle-orm'
 
-interface TimeEntryData {
+export interface TimesheetPainterData {
   id: string
-  userId: string
-  jobId: string
-  jobName: string
-  date: string
+  painterId: string
+  painterName: string
   startTime: string
   endTime: string
   lunchStart: string
   lunchEnd: string
   totalHours: string
+  zohoJunctionId?: string
+}
+
+export interface TimesheetData {
+  id: string
+  userId: string
+  jobId: string
+  jobName: string
+  date: string
   notes?: string
   changeOrder?: string
-  synced?: boolean
-  // Add sundry item fields
+  synced: boolean
+  zohoTimeEntryId?: string
+  totalCrewHours: string
+  painters: TimesheetPainterData[]
   maskingPaperRoll?: string
   plasticRoll?: string
   puttySpackleTub?: string
@@ -35,243 +44,168 @@ interface TimeEntryData {
   brickTapeRoll?: string
 }
 
-/**
- * Looks up Portal User ID from email using Postgres users table
- */
-async function getPortalUserIdFromEmail(email: string): Promise<string | null> {
+const SUNDRY_TO_ZOHO: Record<string, string> = {
+  maskingPaperRoll: 'Masking_Paper_Roll',
+  plasticRoll: 'Plastic_Roll',
+  puttySpackleTub: 'Putty_Spackle_Tub',
+  caulkTube: 'Caulk_Tube',
+  whiteTapeRoll: 'White_Tape_Roll',
+  orangeTapeRoll: 'Orange_Tape_Roll',
+  floorPaperRoll: 'Floor_Paper_Roll',
+  tip: 'Tip',
+  sandingSponge: 'Sanding_Sponge',
+  inchRollerCover18: 'Inch_Roller_Cover1',
+  inchRollerCover9: 'Inch_Roller_Cover',
+  miniCover: 'Mini_Cover',
+  masks: 'Masks',
+  brickTapeRoll: 'Brick_Tape_Roll',
+}
+
+function buildSundryPayload(data: TimesheetData): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [dbKey, zohoName] of Object.entries(SUNDRY_TO_ZOHO)) {
+    const q = parseInt((data as unknown as Record<string, string>)[dbKey] || '0', 10)
+    if (q > 0) out[zohoName] = q
+  }
+  return out
+}
+
+async function getForemanZohoIdFromEmail(email: string): Promise<string | null> {
   try {
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1)
     return user?.zohoId || null
   } catch (error) {
-    console.error('[Sync] Failed to lookup Portal User ID:', error)
+    console.error('[Sync] Failed to lookup Foreman Portal User ID:', error)
     return null
   }
 }
 
 /**
- * Updates Postgres entry with synced flag
+ * Two-phase Zoho sync for a timesheet: create parent Time_Entry, then create each Time_Entries_X_Painters record.
  */
-async function updateSyncedFlag(entryId: string): Promise<void> {
-  try {
-    await db.update(timeEntries)
-      .set({ synced: true })
-      .where(eq(timeEntries.id, entryId))
-    console.log(`[Sync] Updated Postgres synced flag: ${entryId}`)
-  } catch (error) {
-    console.error(`[Sync] Failed to update synced flag for entry ${entryId}:`, error)
+export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: string): Promise<void> {
+  const timezone = getUserTimezoneOffset()
+  const foremanId = await getForemanZohoIdFromEmail(foremanEmail)
+  if (!foremanId) {
+    console.warn(`[Sync] Foreman Portal User ID not found for ${foremanEmail}, skipping Zoho sync`)
+    return
   }
-}
 
-/**
- * Checks if error is a database connection error
- */
-function isDatabaseConnectionError(error: any): boolean {
-  if (!error) return false
-  const errorMessage = error?.message || error?.code || String(error)
-  const errorString = errorMessage.toLowerCase()
-  return (
-    errorString.includes('econnrefused') ||
-    errorString.includes('enotfound') ||
-    errorString.includes('fetch failed') ||
-    errorString.includes('connection') ||
-    error?.code === 'ECONNREFUSED'
-  )
-}
+  let zohoTimeEntryId: string | null = data.zohoTimeEntryId || null
 
-export async function syncToPermanentStorage(entryData: TimeEntryData, userEmail: string): Promise<void> {
-  let postgresSuccess = false
-  let zohoSuccess = false
-
-  try {
-    console.log(`[Sync] Starting sync for entry ${entryData.id}`)
-
-    // 1. Write to Postgres (source of truth) - with graceful error handling
-    const postgresData = {
-      id: entryData.id,
-      userId: entryData.userId,
-      jobId: entryData.jobId,
-      jobName: entryData.jobName,
-      date: entryData.date,
-      startTime: entryData.startTime,
-      endTime: entryData.endTime,
-      lunchStart: entryData.lunchStart,
-      lunchEnd: entryData.lunchEnd,
-      totalHours: entryData.totalHours,
-      notes: entryData.notes || '',
-      changeOrder: entryData.changeOrder || '',
-    }
-
+  // Phase 1: Create parent Time_Entries record if not already created
+  if (!zohoTimeEntryId) {
     try {
-      await db.insert(timeEntries).values(postgresData).onConflictDoNothing()
-      postgresSuccess = true
-      console.log(`[Sync] Written to Postgres: ${entryData.id}`)
-    } catch (postgresError: any) {
-      // Handle Postgres errors gracefully
-      if (isDatabaseConnectionError(postgresError)) {
-        // Database is unavailable - this is expected in dev
-        const errorMsg = postgresError?.message || postgresError?.cause?.message || String(postgresError)
-        console.warn(`[Sync] Postgres unavailable for ${entryData.id} (continuing with Zoho sync)`)
-        console.warn(`[Sync] Connection error: ${errorMsg.substring(0, 100)}`)
-      } else {
-        // Other Postgres errors (constraint violations, etc.)
-        console.error(`[Sync] Postgres error for ${entryData.id}:`, postgresError?.message || postgresError)
-      }
-      // Continue to Zoho sync even if Postgres fails
-    }
-
-    // 2. Write to Zoho CRM (UPDATED - correct module, fields, and timezone)
-    try {
-      // Lookup Portal User ID from email (from Supabase users table)
-      const contractorId = await getPortalUserIdFromEmail(userEmail)
-      
-      if (!contractorId) {
-        console.warn(`[Sync] Portal User ID not found for ${userEmail}, skipping Zoho sync`)
-        console.warn(`[Sync] Make sure user ${userEmail} exists in users table with zoho_id populated`)
-        // If Postgres succeeded, mark as synced
-        if (postgresSuccess) {
-          await updateSyncedFlag(entryData.id)
-        }
-        return
-      }
-
-      console.log(`[Sync] Found Portal User ID for ${userEmail}: ${contractorId}`)
-
-      // Get timezone offset
-      const timezone = getUserTimezoneOffset()
-      
-      // Map sundry items from database to Zoho API names
-      const sundryItemsMap: Record<string, string> = {
-        maskingPaperRoll: 'Masking_Paper_Roll',
-        plasticRoll: 'Plastic_Roll',
-        puttySpackleTub: 'Putty_Spackle_Tub',
-        caulkTube: 'Caulk_Tube',
-        whiteTapeRoll: 'White_Tape_Roll',
-        orangeTapeRoll: 'Orange_Tape_Roll',
-        floorPaperRoll: 'Floor_Paper_Roll',
-        tip: 'Tip',
-        sandingSponge: 'Sanding_Sponge',
-        inchRollerCover18: 'Inch_Roller_Cover1',  // 18" Roller Cover
-        inchRollerCover9: 'Inch_Roller_Cover',     // 9" Roller Cover
-        miniCover: 'Mini_Cover',
-        masks: 'Masks',
-        brickTapeRoll: 'Brick_Tape_Roll',
-      }
-
-      // Build sundry items object for Zoho
-      const zohoSundryItems: Record<string, number> = {}
-      Object.entries(sundryItemsMap).forEach(([dbKey, zohoApiName]) => {
-        const quantity = parseInt(entryData[dbKey as keyof TimeEntryData] as string || '0', 10)
-        if (quantity > 0) {
-          zohoSundryItems[zohoApiName] = quantity
-        }
+      const sundryItems = buildSundryPayload(data)
+      const parent = await zohoClient.createTimeEntryParent({
+        projectId: data.jobId,
+        foremanId,
+        date: data.date,
+        notes: data.notes,
+        sundryItems: Object.keys(sundryItems).length > 0 ? sundryItems : undefined,
       })
-      
-      const zohoData = {
-        projectId: entryData.jobId,              // Deal ID for Project lookup
-        contractorId: contractorId,              // Portal User ID for Contractor lookup
-        date: entryData.date,                     // YYYY-MM-DD
-        startTime: entryData.startTime,           // HH:MM
-        endTime: entryData.endTime,               // HH:MM
-        lunchStart: entryData.lunchStart || undefined,
-        lunchEnd: entryData.lunchEnd || undefined,
-        totalHours: entryData.totalHours,
-        notes: entryData.notes || '',             // Time_Entry_Note
-        timezone: timezone,                       // -07:00 format
-        sundryItems: Object.keys(zohoSundryItems).length > 0 ? zohoSundryItems : undefined,
-      }
-
-      console.log(`[Sync] Sending to Zoho with contractorId: ${contractorId}, projectId: ${entryData.jobId}`)
-      await zohoClient.createTimeEntry(zohoData)
-      zohoSuccess = true
-      console.log(`[Sync] Successfully written to Zoho: ${entryData.id}`)
-    } catch (zohoError: any) {
-      // Zoho sync failure - log but continue
-      const errorMessage = zohoError?.message || zohoError?.code || String(zohoError)
-      console.error(`[Sync] Zoho sync failed for ${entryData.id}:`, errorMessage)
-      // Don't throw - continue to mark as synced if Postgres succeeded
-    }
-
-    // 3. Update Postgres: Mark as synced if at least one permanent storage succeeded
-    if (postgresSuccess || zohoSuccess) {
-      await updateSyncedFlag(entryData.id)
-      console.log(`[Sync] Entry ${entryData.id} synced (Postgres: ${postgresSuccess}, Zoho: ${zohoSuccess})`)
-    } else {
-      console.warn(`[Sync] Entry ${entryData.id} failed to sync to both Postgres and Zoho - will retry later`)
-    }
-    
-  } catch (error) {
-    // Unexpected error - log but don't throw
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error(`[Sync] Unexpected error syncing entry ${entryData.id}:`, errorMessage)
-    // Don't throw - let it be retried later via piggyback recovery
-  }
-}
-
-/**
- * Retries failed syncs for a user (piggyback recovery)
- * Queries Postgres for entries with synced: false and retries
- */
-export async function retryFailedSyncs(userEmail: string, userId: string): Promise<void> {
-  try {
-    // Get all unsynced entries from Postgres for this user
-    const unsyncedEntries = await db
-      .select()
-      .from(timeEntries)
-      .where(and(
-        eq(timeEntries.userId, userId),
-        eq(timeEntries.synced, false)
-      ))
-    
-    if (!unsyncedEntries || unsyncedEntries.length === 0) {
+      zohoTimeEntryId = parent.id
+      await db.update(timeEntries)
+        .set({ zohoTimeEntryId: parent.id })
+        .where(eq(timeEntries.id, data.id))
+      console.log(`[Sync] Created Zoho parent Time_Entry: ${zohoTimeEntryId}`)
+    } catch (err: any) {
+      console.error(`[Sync] Failed to create Zoho parent for timesheet ${data.id}:`, err?.message || err)
       return
     }
+  }
 
-    console.log(`[Retry] Found ${unsyncedEntries.length} unsynced entries, retrying...`)
-
-    // Retry each failed entry
-    for (const entry of unsyncedEntries) {
-      try {
-        const entryData: TimeEntryData = {
-          id: entry.id,
-          userId: entry.userId,
-          jobId: entry.jobId,
-          jobName: entry.jobName,
-          date: entry.date,
-          startTime: entry.startTime,
-          endTime: entry.endTime,
-          lunchStart: entry.lunchStart,
-          lunchEnd: entry.lunchEnd,
-          totalHours: entry.totalHours,
-          notes: entry.notes || '',
-          changeOrder: entry.changeOrder || '',
-          synced: entry.synced,
-          // Include sundry items from database (convert null to undefined)
-          maskingPaperRoll: entry.maskingPaperRoll ?? undefined,
-          plasticRoll: entry.plasticRoll ?? undefined,
-          puttySpackleTub: entry.puttySpackleTub ?? undefined,
-          caulkTube: entry.caulkTube ?? undefined,
-          whiteTapeRoll: entry.whiteTapeRoll ?? undefined,
-          orangeTapeRoll: entry.orangeTapeRoll ?? undefined,
-          floorPaperRoll: entry.floorPaperRoll ?? undefined,
-          tip: entry.tip ?? undefined,
-          sandingSponge: entry.sandingSponge ?? undefined,
-          inchRollerCover18: entry.inchRollerCover18 ?? undefined,
-          inchRollerCover9: entry.inchRollerCover9 ?? undefined,
-          miniCover: entry.miniCover ?? undefined,
-          masks: entry.masks ?? undefined,
-          brickTapeRoll: entry.brickTapeRoll ?? undefined,
-        }
-        await syncToPermanentStorage(entryData, userEmail)
-      } catch (error) {
-        console.error(`[Retry] Failed to retry entry ${entry.id}:`, error)
-        // Continue with next entry
-      }
+  // Phase 2: Create junction records for painters that don't have zoho_junction_id
+  const paintersToSync = data.painters.filter(p => !p.zohoJunctionId)
+  for (const p of paintersToSync) {
+    try {
+      const junction = await zohoClient.createTimesheetPainterEntry({
+        zohoTimeEntryId,
+        painterId: p.painterId,
+        date: data.date,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        lunchStart: p.lunchStart || undefined,
+        lunchEnd: p.lunchEnd || undefined,
+        totalHours: p.totalHours,
+        timezone,
+      })
+      await db.update(timesheetPainters)
+        .set({ zohoJunctionId: junction.id })
+        .where(eq(timesheetPainters.id, p.id))
+      console.log(`[Sync] Created Zoho junction for painter ${p.painterId}: ${junction.id}`)
+    } catch (err: any) {
+      console.error(`[Sync] Failed to create Zoho junction for painter ${p.painterId}:`, err?.message || err)
     }
+  }
 
-    console.log(`[Retry] Completed retry for ${unsyncedEntries.length} entries`)
-  } catch (error) {
-    console.error('[Retry] Failed to retry syncs:', error)
-    // Don't throw - this is a background operation
+  // Phase 3: If all painters now have zoho_junction_id, mark timesheet as synced
+  const allSynced = data.painters.every(p => p.zohoJunctionId) ||
+    (data.painters.filter(p => !p.zohoJunctionId).length === 0 && paintersToSync.length === 0)
+  const afterSync = await db.select().from(timesheetPainters).where(eq(timesheetPainters.timesheetId, data.id))
+  const allJunctionSynced = afterSync.length > 0 && afterSync.every(row => row.zohoJunctionId != null)
+  if (zohoTimeEntryId && allJunctionSynced) {
+    await db.update(timeEntries).set({ synced: true }).where(eq(timeEntries.id, data.id))
+    console.log(`[Sync] Timesheet ${data.id} marked synced`)
   }
 }
 
+/**
+ * Retry unsynced timesheets for this foreman (piggyback recovery).
+ */
+export async function retryFailedSyncs(foremanEmail: string, foremanUserId: string): Promise<void> {
+  try {
+    const unsynced = await db.select().from(timeEntries).where(and(
+      eq(timeEntries.userId, foremanUserId),
+      eq(timeEntries.synced, false)
+    ))
+    if (unsynced.length === 0) return
+
+    console.log(`[Retry] Found ${unsynced.length} unsynced timesheets, retrying...`)
+    for (const te of unsynced) {
+      const rows = await db.select().from(timesheetPainters).where(eq(timesheetPainters.timesheetId, te.id))
+      const paintersData: TimesheetPainterData[] = rows.map(r => ({
+        id: r.id,
+        painterId: r.painterId,
+        painterName: r.painterName,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        lunchStart: r.lunchStart || '',
+        lunchEnd: r.lunchEnd || '',
+        totalHours: r.totalHours,
+        zohoJunctionId: r.zohoJunctionId ?? undefined,
+      }))
+      const timesheetData: TimesheetData = {
+        id: te.id,
+        userId: te.userId,
+        jobId: te.jobId,
+        jobName: te.jobName,
+        date: te.date,
+        notes: te.notes ?? undefined,
+        changeOrder: te.changeOrder ?? undefined,
+        synced: te.synced,
+        zohoTimeEntryId: te.zohoTimeEntryId ?? undefined,
+        totalCrewHours: te.totalCrewHours ?? '0',
+        painters: paintersData,
+        maskingPaperRoll: te.maskingPaperRoll ?? undefined,
+        plasticRoll: te.plasticRoll ?? undefined,
+        puttySpackleTub: te.puttySpackleTub ?? undefined,
+        caulkTube: te.caulkTube ?? undefined,
+        whiteTapeRoll: te.whiteTapeRoll ?? undefined,
+        orangeTapeRoll: te.orangeTapeRoll ?? undefined,
+        floorPaperRoll: te.floorPaperRoll ?? undefined,
+        tip: te.tip ?? undefined,
+        sandingSponge: te.sandingSponge ?? undefined,
+        inchRollerCover18: te.inchRollerCover18 ?? undefined,
+        inchRollerCover9: te.inchRollerCover9 ?? undefined,
+        miniCover: te.miniCover ?? undefined,
+        masks: te.masks ?? undefined,
+        brickTapeRoll: te.brickTapeRoll ?? undefined,
+      }
+      await syncTimesheetToZoho(timesheetData, foremanEmail)
+    }
+    console.log(`[Retry] Completed retry for ${unsynced.length} timesheets`)
+  } catch (error) {
+    console.error('[Retry] Failed to retry syncs:', error)
+  }
+}

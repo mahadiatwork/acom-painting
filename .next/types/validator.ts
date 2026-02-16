@@ -92,15 +92,6 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
-// Validate ../../src/app/(main)/entry/test_new/page.tsx
-{
-  type __IsExpected<Specific extends AppPageConfig<"/entry/test_new">> = Specific
-  const handler = {} as typeof import("../../src/app/(main)/entry/test_new/page.js")
-  type __Check = __IsExpected<typeof handler>
-  // @ts-ignore
-  type __Unused = __Check
-}
-
 // Validate ../../src/app/(main)/history/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/history">> = Specific
@@ -164,6 +155,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/painters/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/painters">> = Specific
+  const handler = {} as typeof import("../../src/app/api/painters/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/projects/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/projects">> = Specific
@@ -191,15 +191,6 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
-// Validate ../../src/app/api/test/zoho-sync/route.ts
-{
-  type __IsExpected<Specific extends RouteHandlerConfig<"/api/test/zoho-sync">> = Specific
-  const handler = {} as typeof import("../../src/app/api/test/zoho-sync/route.js")
-  type __Check = __IsExpected<typeof handler>
-  // @ts-ignore
-  type __Unused = __Check
-}
-
 // Validate ../../src/app/api/time-entries/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/time-entries">> = Specific
@@ -222,6 +213,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/assignments">> = Specific
   const handler = {} as typeof import("../../src/app/api/webhooks/assignments/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/webhooks/painters/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/painters">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/painters/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

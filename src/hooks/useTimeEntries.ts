@@ -1,21 +1,31 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 
+export interface TimeEntryPainter {
+  id: string
+  painterId: string
+  painterName: string
+  startTime: string
+  endTime: string
+  lunchStart: string
+  lunchEnd: string
+  totalHours: number
+  zohoJunctionId?: string | null
+}
+
 export interface TimeEntry {
   id: string
   userId: string
   jobId: string
   jobName: string
   date: string
-  startTime: string
-  endTime: string
-  lunchStart: string
-  lunchEnd: string
-  totalHours: number
+  totalCrewHours: number
   synced: boolean
   notes?: string
   changeOrder?: string
-  // Sundry items
+  painters: TimeEntryPainter[]
+  sundryItems?: Record<string, string>
+  // Legacy flat sundry (API may return either)
   maskingPaperRoll?: string
   plasticRoll?: string
   puttySpackleTub?: string

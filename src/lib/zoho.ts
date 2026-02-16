@@ -105,6 +105,26 @@ class ZohoClient {
     }
   }
 
+  /** Fetch all Painters from Zoho CRM (for crew dropdown and cron sync) */
+  async getPainters(): Promise<{ id: string; Name?: string; Email?: string; Phone?: string; Active?: boolean }[]> {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
+      const token = await this.getAccessToken();
+      const moduleName = process.env.ZOHO_PAINTERS_MODULE_NAME || 'Painters';
+      const response = await axios.get(`${this.apiDomain}/crm/v2/${moduleName}`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        params: { fields: 'id,Name,Email,Phone,Active' },
+      });
+      return response.data.data || [];
+    } catch (error: any) {
+      console.error('Zoho API Error (getPainters):', error?.message || error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('[Zoho] getPainters response:', error.response.status, error.response.data);
+      }
+      return [];
+    }
+  }
+
   async getUserJobConnections() {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
@@ -173,86 +193,96 @@ class ZohoClient {
     return formatted;
   }
 
-  async createTimeEntry(data: {
-    projectId: string;        // Deal ID for Project lookup
-    contractorId: string;     // Portal User ID for Contractor lookup
-    date: string;             // YYYY-MM-DD
-    startTime: string;        // HH:MM
-    endTime: string;          // HH:MM
-    lunchStart?: string;      // HH:MM (optional)
-    lunchEnd?: string;        // HH:MM (optional)
-    totalHours: string;       // Calculated hours
-    notes?: string;            // Time_Entry_Note
-    timezone: string;         // -07:00 format
-    sundryItems?: Record<string, number>; // Map of Zoho API names to quantities
-  }) {
+  /**
+   * Create parent Time_Entries record only (Foreman-based model).
+   * No per-painter time fields; those go in Time_Entries_X_Painters.
+   */
+  async createTimeEntryParent(data: {
+    projectId: string;
+    foremanId: string;   // Portal User ID
+    date: string;        // YYYY-MM-DD
+    notes?: string;
+    sundryItems?: Record<string, number>;
+  }): Promise<{ id: string }> {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
         return { id: 'mock-id-123' };
       }
-      
       const token = await this.getAccessToken();
-      
-      // Format DateTime fields with timezone (Zoho format: yyyy-MM-ddTHH:mm:ss±HH:mm)
-      const startDateTime = this.formatZohoDateTime(data.date, data.startTime, data.timezone);
-      const endDateTime = this.formatZohoDateTime(data.date, data.endTime, data.timezone);
-      
-      // Auto-generate Name field
-      const entryName = `Time Entry - ${data.date} ${data.startTime} to ${data.endTime}`;
-      
+      const entryName = `Timesheet - ${data.date}`;
       const zohoPayload: Record<string, any> = {
         Name: entryName,
-        Job: { id: data.projectId },                    // Lookup field (Deal ID) - must be object with id
-        Portal_User: { id: data.contractorId },         // Lookup field (Portal User ID) - must be object with id
-        Date: data.date,                        // Date field (YYYY-MM-DD)
-        Start_Time: startDateTime,               // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)
-        End_Time: endDateTime,                  // DateTime with timezone (yyyy-MM-ddTHH:mm:ss±HH:mm)
-        Total_Hours: data.totalHours,            // Single Line
-        Time_Entry_Note: data.notes || '',      // Multi Line (Large)
+        Job: { id: data.projectId },
+        Portal_User: { id: data.foremanId },
+        Date: data.date,
+        Time_Entry_Note: data.notes || '',
       };
+      if (data.sundryItems) {
+        Object.entries(data.sundryItems).forEach(([apiName, quantity]) => {
+          if (quantity > 0) zohoPayload[apiName] = quantity;
+        });
+      }
+      console.log('[Zoho] Creating time entry parent:', JSON.stringify(zohoPayload, null, 2));
+      const response = await axios.post(
+        `${this.apiDomain}/crm/v2/Time_Entries`,
+        { data: [zohoPayload] },
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      console.log('[Zoho] Time entry parent created:', response.data?.data?.[0]?.id);
+      return response.data.data[0];
+    } catch (error: any) {
+      console.error('[Zoho] API Error (createTimeEntryParent):', error?.message || error);
+      if (error?.response) {
+        console.error('[Zoho] Error response:', error.response.status, JSON.stringify(error.response.data, null, 2));
+      }
+      throw error;
+    }
+  }
 
-      // Add lunch times if provided
+  /**
+   * Create one record in Time_Entries_X_Painters junction module.
+   */
+  async createTimesheetPainterEntry(data: {
+    zohoTimeEntryId: string;
+    painterId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    lunchStart?: string;
+    lunchEnd?: string;
+    totalHours: string;
+    timezone: string;
+  }): Promise<{ id: string }> {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
+        return { id: 'mock-junction-123' };
+      }
+      const token = await this.getAccessToken();
+      const startDateTime = this.formatZohoDateTime(data.date, data.startTime, data.timezone);
+      const endDateTime = this.formatZohoDateTime(data.date, data.endTime, data.timezone);
+      const zohoPayload: Record<string, any> = {
+        Time_Entry: { id: data.zohoTimeEntryId },
+        Painter: { id: data.painterId },
+        Start_Time: startDateTime,
+        End_Time: endDateTime,
+        Total_Hours: data.totalHours,
+      };
       if (data.lunchStart && data.lunchEnd) {
         zohoPayload.Lunch_Start = this.formatZohoDateTime(data.date, data.lunchStart, data.timezone);
         zohoPayload.Lunch_End = this.formatZohoDateTime(data.date, data.lunchEnd, data.timezone);
       }
-      
-      // Log the payload for debugging
-      console.log('[Zoho] Creating time entry with payload:', JSON.stringify(zohoPayload, null, 2));
-
-      // Add sundry items (only if quantity > 0)
-      if (data.sundryItems) {
-        Object.entries(data.sundryItems).forEach(([apiName, quantity]) => {
-          if (quantity > 0) {
-            zohoPayload[apiName] = quantity;
-          }
-        });
-      }
-      
+      const moduleName = process.env.ZOHO_TE_PAINTERS_MODULE_NAME || 'Time_Entries_X_Painters';
       const response = await axios.post(
-        `${this.apiDomain}/crm/v2/Time_Entries`,  // Zoho CRM module name
+        `${this.apiDomain}/crm/v2/${moduleName}`,
         { data: [zohoPayload] },
-        {
-          headers: { Authorization: `Zoho-oauthtoken ${token}` }
-        }
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
       );
-      
-      console.log('[Zoho] Time entry created successfully:', response.data);
       return response.data.data[0];
     } catch (error: any) {
-      console.error('[Zoho] API Error (createTimeEntry):', error?.message || error);
-      
-      // Log detailed error response if available
+      console.error('[Zoho] API Error (createTimesheetPainterEntry):', error?.message || error);
       if (error?.response) {
-        console.error('[Zoho] Error response status:', error.response.status);
-        console.error('[Zoho] Error response data:', JSON.stringify(error.response.data, null, 2));
+        console.error('[Zoho] Junction error:', error.response.status, JSON.stringify(error.response.data, null, 2));
       }
-      
-      // Log the payload that failed for debugging
-      if (error?.config?.data) {
-        console.error('[Zoho] Failed payload:', error.config.data);
-      }
-      
       throw error;
     }
   }

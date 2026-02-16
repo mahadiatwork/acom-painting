@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { zohoClient } from '@/lib/zoho'
 import { db } from '@/lib/db'
-import { projects, userProjects, users } from '@/lib/schema'
+import { projects, userProjects, users, painters } from '@/lib/schema'
 import { eq, inArray } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
@@ -198,12 +198,49 @@ export async function GET(request: Request) {
       // Continue even if Postgres fails
     }
 
+    // ---------------------------------------------------------
+    // STEP 3: Sync Painters from Zoho
+    // ---------------------------------------------------------
+    let paintersSynced = 0
+    try {
+      const zohoPainters = await zohoClient.getPainters()
+      if (zohoPainters && zohoPainters.length > 0) {
+        for (const p of zohoPainters) {
+          const id = p.id
+          const name = (p as { Name?: string }).Name ?? ''
+          if (!id || !name) continue
+          await db.insert(painters).values({
+            id: String(id),
+            name: String(name),
+            email: (p as { Email?: string }).Email ?? null,
+            phone: (p as { Phone?: string }).Phone ?? null,
+            active: (p as { Active?: boolean }).Active !== false,
+            updatedAt: new Date().toISOString(),
+          }).onConflictDoUpdate({
+            target: painters.id,
+            set: {
+              name: String(name),
+              email: (p as { Email?: string }).Email ?? null,
+              phone: (p as { Phone?: string }).Phone ?? null,
+              active: (p as { Active?: boolean }).Active !== false,
+              updatedAt: new Date().toISOString(),
+            },
+          })
+          paintersSynced++
+        }
+        console.log(`[Cron] Synced ${paintersSynced} painters to Postgres`)
+      }
+    } catch (dbError: any) {
+      console.error('[Cron] Postgres painters sync failed:', dbError?.message || dbError)
+    }
+
     return NextResponse.json({ 
       success: true, 
       projectsCount: projectsData.length,
       usersSynced: userMap.size,
       connectionsProcessed: connectionCount,
       postgresConnectionsSynced: postgresConnectionsSynced,
+      paintersSynced,
       timestamp: new Date().toISOString(),
       // DEBUG: Include raw data for troubleshooting
       debug: {

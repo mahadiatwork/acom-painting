@@ -31,9 +31,9 @@ export function useWeeklyHours() {
       return entryDate >= monday && entryDate <= sunday
     })
 
-    // Sum total hours
+    // Sum total crew hours per timesheet
     const total = weekEntries.reduce((sum, entry) => {
-      return sum + (entry.totalHours || 0)
+      return sum + (entry.totalCrewHours ?? 0)
     }, 0)
 
     return Number(total.toFixed(2))

@@ -68,7 +68,7 @@ export default function History() {
           </div>
         ) : entries.length === 0 ? (
           <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
-            <p className="text-gray-500">No entries found. Create your first time entry!</p>
+            <p className="text-gray-500">No timesheets found. Create your first timesheet!</p>
           </div>
         ) : (
           <div className="space-y-4 pb-4">
@@ -103,17 +103,16 @@ export default function History() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-400 uppercase font-semibold mb-1">Total Hours</div>
+                    <div className="text-xs text-gray-400 uppercase font-semibold mb-1">Crew hours</div>
                     <div className="flex items-center text-gray-700 font-medium">
                       <Clock size={16} className="mr-2 text-primary" />
-                      {entry.totalHours} hrs
+                      {entry.totalCrewHours ?? 0} hrs
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-sm text-gray-600">
-                  <div>Start: <span className="font-mono text-gray-900">{entry.startTime}</span></div>
-                  <div>End: <span className="font-mono text-gray-900">{entry.endTime}</span></div>
+                <div className="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-600">
+                  {(entry.painters?.length ?? 0)} painter{(entry.painters?.length ?? 0) === 1 ? "" : "s"}
                 </div>
                 {entry.notes && (
                   <div className="mt-3 pt-3 border-t border-gray-100">

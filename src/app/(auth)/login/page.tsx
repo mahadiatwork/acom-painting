@@ -66,13 +66,13 @@ export default function Login() {
             />
           </div>
           <div className="h-1 w-16 bg-primary rounded-full mb-2"></div>
-          <p className="text-gray-400 text-sm font-medium tracking-widest uppercase">Field Time Entry</p>
+          <p className="text-gray-400 text-sm font-medium tracking-widest uppercase">Foreman Timesheet</p>
         </div>
 
         <div className="flex-1 p-8 pt-10 bg-white">
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-            <p className="text-gray-500">Please sign in to continue</p>
+            <p className="text-gray-500">Foremen: sign in with your company email to log crew timesheets.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">

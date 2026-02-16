@@ -423,7 +423,120 @@ if (totalErrors > 0)
 
 ---
 
-## 3. Alternative: Using Zoho Connection (If You Have API Key Connection)
+## 3. Painters Webhook (Foreman Model)
+
+**Purpose**: Sync Painter records to Supabase when a crew member is created or updated in Zoho CRM, so Foremen can select them in the "New Timesheet" crew dropdown.
+
+**Workflow Rule Configuration**:
+- **Module**: `Painters` (your custom Painters module)
+- **When**: `Create` or `Edit`
+- **Action**: Call function `sync_painter_to_app`
+
+**Required fields on Painters module**: `Name` (required), `Email`, `Phone`, `Active` (checkbox/boolean). Adjust field API names below if yours differ (e.g. `Full_Name` instead of `Name`).
+
+### Deluge Script
+
+```javascript
+/* 
+ * Function: sync_painter_to_app
+ * Trigger: Workflow Rule on Painters module (Create / Edit)
+ * Purpose: Sync painter to Supabase for Foreman timesheet crew dropdown
+ */
+
+// 1. Get Painter record (id is passed from workflow - use your workflow's variable name)
+//    Common: workflow passes "id" or the record ID field
+painterId = id;  // Use the variable your workflow passes (e.g. id, painterId, etc.)
+if (painterId == null || painterId == "")
+{
+    info "ERROR: No Painter ID passed from workflow";
+    return;
+}
+
+// 2. Get full record from Painters module (replace "Painters" with your module API name if different)
+rec = zoho.crm.getRecordById("Painters", painterId);
+if (rec == null)
+{
+    info "ERROR: Could not get Painter record " + painterId;
+    return;
+}
+
+// 3. Extract fields (use your actual Zoho field API names)
+idStr = rec.get("id").toString();
+nameVal = ifnull(rec.get("Name"), "");           // Or Full_Name if that's your field
+emailVal = rec.get("Email");                     // Can be null
+phoneVal = rec.get("Phone");                     // Can be null
+activeVal = rec.get("Active");                   // Checkbox: true/false, or 1/0
+if (activeVal == null) { activeVal = true; }
+
+// 4. Escape double quotes for JSON (in case name/email/phone contain quotes)
+nameStr = nameVal.replace("\"", "\\\"");
+emailStr = (emailVal != null ? emailVal.toString() : "").replace("\"", "\\\"");
+phoneStr = (phoneVal != null ? phoneVal.toString() : "").replace("\"", "\\\"");
+
+// 5. Build JSON body (Active as boolean)
+activeJson = (activeVal == true || activeVal == 1 || activeVal == "1") ? "true" : "false";
+jsonBody = "{\"id\":\"" + idStr + "\",\"Name\":\"" + nameStr + "\",\"Email\":\"" + emailStr + "\",\"Phone\":\"" + phoneStr + "\",\"Active\":" + activeJson + "}";
+
+// 6. Get webhook secret from Org Variable
+secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+if (secret == null || secret == "")
+{
+    info "ERROR: ZOHO_WEBHOOK_SECRET Org Variable is empty or not found";
+    return;
+}
+secret = secret.trim();
+
+// 7. Build headers
+headers = Map();
+headers.put("Authorization", "Bearer " + secret);
+headers.put("Content-Type", "application/json");
+
+// 8. Call webhook
+url = "https://acom-painting.vercel.app/api/webhooks/painters";
+
+info "Syncing Painter " + idStr + " to Supabase";
+
+response = invokeurl
+[
+    url: url
+    type: POST
+    parameters: jsonBody
+    headers: headers
+];
+
+// 9. Check response
+if (response != null && response.contains("\"success\":true"))
+{
+    info "Painter " + idStr + " synced successfully";
+}
+else
+{
+    info "ERROR: Failed to sync Painter " + idStr + " - " + response;
+}
+```
+
+### Workflow setup in Zoho CRM
+
+1. Go to **Setup > Automation > Workflow Rules**.
+2. Create a new rule on module **Painters**.
+3. **When**: Record is created **OR** Record is edited.
+4. **Condition**: (optional) e.g. when `Name` is not empty.
+5. **Action**: Execute function → choose the function that contains the script above.
+6. When configuring the function, pass the **Record ID** (e.g. map the field `id` or "Record Id" to the function parameter `id`). The variable name in the script (`id` in step 1) must match what you pass from the workflow.
+
+### Field mapping reference (Painters)
+
+| Zoho CRM Field (API name) | Payload key | Notes |
+|---------------------------|-------------|--------|
+| `id`                      | `id`        | Required |
+| `Name` (or `Full_Name`)   | `Name`      | Required |
+| `Email`                   | `Email`     | Optional |
+| `Phone`                   | `Phone`     | Optional |
+| `Active`                  | `Active`    | Boolean; default true if missing |
+
+---
+
+## 4. Alternative: Using Zoho Connection (If You Have API Key Connection)
 
 If you have created a Zoho Connection with API Key authentication (not OAuth), you can use it instead of manual headers:
 
@@ -448,7 +561,7 @@ response = invokeurl
 
 ---
 
-## 4. Testing the Scripts
+## 5. Testing the Scripts
 
 ### Test Trigger Sync
 
@@ -465,9 +578,16 @@ response = invokeurl
 3. Verify projects in Supabase are updated
 4. Check Vercel logs for the sync requests
 
+### Test Painters Webhook
+
+1. Create or edit a Painter in Zoho CRM (Painters module).
+2. Check the workflow execution in Zoho (Timeline or Execution Logs).
+3. In Supabase Table Editor, open the `painters` table and confirm the record exists or was updated.
+4. In the app, open "New Timesheet" and confirm the painter appears in the crew dropdown.
+
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 ### Common Issues
 
@@ -504,7 +624,7 @@ response = invokeurl
 
 ---
 
-## 6. Field Mapping Reference
+## 7. Field Mapping Reference
 
 | Zoho CRM Field | Payload Key | Notes |
 |----------------|-------------|-------|
@@ -524,7 +644,7 @@ response = invokeurl
 
 ---
 
-## 7. Next Steps
+## 8. Next Steps
 
 After setting up the sync scripts:
 

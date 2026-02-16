@@ -1,27 +1,33 @@
 "use client"
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Layout } from "@/components/Layout";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { TextAreaField } from "@/components/FormFields";
-import { ArrowLeft, Save, Loader2, Calendar, Clock, Package, Plus, Minus } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { useProjects } from "@/hooks/useProjects";
-import { createClient } from "@/lib/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import React, { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Layout } from "@/components/Layout"
+import { PrimaryButton } from "@/components/PrimaryButton"
+import { TextAreaField } from "@/components/FormFields"
+import { ArrowLeft, Save, Loader2, Calendar, Clock, Package, Plus, Minus, Trash2, UserPlus } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { useProjects } from "@/hooks/useProjects"
+import { usePainters } from "@/hooks/usePainters"
+import { useQueryClient } from "@tanstack/react-query"
 
-// Tab type
-type TabType = "time-entry" | "sundry-entry";
+type TabType = "crew" | "sundry"
 
-// Sundry item interface
-interface SundryItem {
-  sundryItem: string;
-  quantity: number;
+interface PainterRow {
+  painterId: string
+  painterName: string
+  startTime: string
+  endTime: string
+  lunchStart: string
+  lunchEnd: string
 }
 
-// Sundry items list
+interface SundryItem {
+  sundryItem: string
+  quantity: number
+}
+
 const SUNDRY_ITEMS = [
   "Masking Paper Roll",
   "Plastic Roll",
@@ -37,498 +43,340 @@ const SUNDRY_ITEMS = [
   "Mini Cover",
   "Masks",
   "Brick Tape Roll",
-];
+]
+
+const emptyPainterRow = (): PainterRow => ({
+  painterId: "",
+  painterName: "",
+  startTime: "",
+  endTime: "",
+  lunchStart: "",
+  lunchEnd: "",
+})
+
+function parseTimeToMinutes(time: string): number {
+  if (!time) return 0
+  const [h, m] = time.split(":").map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
+function computeHours(start: string, end: string, lunchStart: string, lunchEnd: string): number {
+  let workM = parseTimeToMinutes(end) - parseTimeToMinutes(start)
+  if (lunchStart && lunchEnd) {
+    const lunchM = parseTimeToMinutes(lunchEnd) - parseTimeToMinutes(lunchStart)
+    if (lunchM > 0) workM -= lunchM
+  }
+  return workM > 0 ? Number((workM / 60).toFixed(2)) : 0
+}
 
 export default function NewEntry() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<TabType>("crew")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState<TabType>("time-entry");
+  const [jobId, setJobId] = useState("")
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [notes, setNotes] = useState("")
+  const [painters, setPainters] = useState<PainterRow[]>([emptyPainterRow()])
+  const [sundryItems, setSundryItems] = useState<SundryItem[]>([])
 
-  // Sundry Entry State - only items with quantity > 0 will be stored
-  const [sundryItems, setSundryItems] = useState<SundryItem[]>([]);
+  const { data: projects, isLoading: isLoadingProjects } = useProjects()
+  const { data: paintersList = [], isLoading: isLoadingPainters } = usePainters()
 
-  // Data Fetching
-  const { data: projects, isLoading: isLoadingProjects } = useProjects();
+  const addPainter = () => setPainters((prev) => [...prev, emptyPainterRow()])
+  const removePainter = (index: number) => {
+    if (painters.length <= 1) return
+    setPainters((prev) => prev.filter((_, i) => i !== index))
+  }
+  const updatePainter = (index: number, field: keyof PainterRow, value: string) => {
+    setPainters((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      if (field === "painterId") {
+        const p = paintersList.find((x) => x.id === value)
+        if (p) next[index].painterName = p.name
+      }
+      return next
+    })
+  }
 
-  // Time Entry Form State
-  const [jobId, setJobId] = useState("");
-  const [date, setDate] = useState(() => {
-    // Default to today's date in YYYY-MM-DD format
-    return new Date().toISOString().split('T')[0];
-  });
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [lunchStart, setLunchStart] = useState("");
-  const [lunchEnd, setLunchEnd] = useState("");
-  const [notes, setNotes] = useState("");
-
-  // Get quantity of a sundry item
-  const getItemQuantity = (itemName: string): number => {
-    const item = sundryItems.find(i => i.sundryItem === itemName);
-    return item ? item.quantity : 0;
-  };
-
-  // Handle increment of sundry item
+  const getItemQuantity = (itemName: string) => {
+    const item = sundryItems.find((i) => i.sundryItem === itemName)
+    return item ? item.quantity : 0
+  }
   const handleIncrement = (itemName: string) => {
-    setSundryItems(prev => {
-      const existingIndex = prev.findIndex(i => i.sundryItem === itemName);
-      let newItems: SundryItem[];
-
-      if (existingIndex >= 0) {
-        // Item exists, increment quantity
-        newItems = prev.map((item, index) =>
-          index === existingIndex
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        // Item doesn't exist, add new item with quantity 1
-        newItems = [...prev, { sundryItem: itemName, quantity: 1 }];
-      }
-
-      // Log state to console
-      console.log("=== SUNDRY ITEMS STATE ===");
-      console.log("Sundry Items:", newItems);
-      console.log("===========================");
-
-      return newItems;
-    });
-  };
-
-  // Handle decrement of sundry item
+    setSundryItems((prev) => {
+      const i = prev.findIndex((x) => x.sundryItem === itemName)
+      if (i >= 0) return prev.map((x, j) => (j === i ? { ...x, quantity: x.quantity + 1 } : x))
+      return [...prev, { sundryItem: itemName, quantity: 1 }]
+    })
+  }
   const handleDecrement = (itemName: string) => {
-    setSundryItems(prev => {
-      const existingIndex = prev.findIndex(i => i.sundryItem === itemName);
-
-      if (existingIndex < 0) return prev; // Item doesn't exist
-
-      const currentQuantity = prev[existingIndex].quantity;
-      let newItems: SundryItem[];
-
-      if (currentQuantity <= 1) {
-        // Remove item from array if quantity becomes 0
-        newItems = prev.filter((_, index) => index !== existingIndex);
-      } else {
-        // Decrement quantity
-        newItems = prev.map((item, index) =>
-          index === existingIndex
-            ? { ...item, quantity: item.quantity - 1 }
-            : item
-        );
-      }
-
-      // Log state to console
-      console.log("=== SUNDRY ITEMS STATE ===");
-      console.log("Sundry Items:", newItems);
-      console.log("===========================");
-
-      return newItems;
-    });
-  };
+    setSundryItems((prev) => {
+      const i = prev.findIndex((x) => x.sundryItem === itemName)
+      if (i < 0) return prev
+      const q = prev[i].quantity
+      if (q <= 1) return prev.filter((_, j) => j !== i)
+      return prev.map((x, j) => (j === i ? { ...x, quantity: x.quantity - 1 } : x))
+    })
+  }
 
   const handleSubmit = async () => {
-    // Validation
     if (!jobId) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a job",
-        variant: "destructive",
-      });
-      return;
+      toast({ title: "Validation Error", description: "Please select a job", variant: "destructive" })
+      return
+    }
+    const validPainters = painters.filter((p) => p.painterId && p.startTime && p.endTime)
+    if (validPainters.length === 0) {
+      toast({ title: "Validation Error", description: "Add at least one painter with start and end times", variant: "destructive" })
+      return
+    }
+    const painterIds = new Set(validPainters.map((p) => p.painterId))
+    if (painterIds.size !== validPainters.length) {
+      toast({ title: "Validation Error", description: "Each painter can only appear once", variant: "destructive" })
+      return
     }
 
-    if (!startTime || !endTime) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter start and end times",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
+    setIsSubmitting(true)
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
-
-      // Calculate total hours
-      const parseTime = (value: string) => {
-        if (!value) return 0;
-        const [h, m] = value.split(":").map(Number);
-        return h * 60 + m;
-      };
-
-      // Calculate work minutes
-      let totalMinutes = parseTime(endTime) - parseTime(startTime);
-
-      // Subtract lunch break if both lunch times are provided
-      if (lunchStart && lunchEnd) {
-        const lunchMinutes = parseTime(lunchEnd) - parseTime(lunchStart);
-        if (lunchMinutes > 0) {
-          totalMinutes -= lunchMinutes;
-        }
-      }
-
-      const totalHours = totalMinutes > 0 ? Number((totalMinutes / 60).toFixed(2)) : 0;
-
-      const submissionData = {
+      const payload = {
         jobId,
-        jobName: projects?.find(j => j.id.toString() === jobId)?.name || "",
+        jobName: projects?.find((j) => j.id === jobId)?.name ?? "",
         date,
-        startTime,
-        endTime,
-        lunchStart: lunchStart || "",
-        lunchEnd: lunchEnd || "",
-        totalHours,
         notes: notes || "",
         changeOrder: "",
-        userId: user.id,
-        sundryItems: sundryItems.filter(item => item.quantity > 0), // Only send items with quantity > 0
-      };
-
-      const response = await fetch("/api/time-entries", {
+        sundryItems: sundryItems.filter((i) => i.quantity > 0),
+        painters: validPainters.map((p) => ({
+          painterId: p.painterId,
+          painterName: p.painterName,
+          startTime: p.startTime,
+          endTime: p.endTime,
+          lunchStart: p.lunchStart || "",
+          lunchEnd: p.lunchEnd || "",
+        })),
+      }
+      const res = await fetch("/api/time-entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(submissionData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to save entry");
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to save timesheet")
       }
-
-      // Invalidate React Query cache to trigger refetch
-      // refetchType: 'active' ensures active queries refetch immediately
-      queryClient.invalidateQueries({
-        queryKey: ['time-entries'],
-        refetchType: 'active' // Refetch active queries immediately
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['weeklyHours'],
-        refetchType: 'active'
-      });
-
-      toast({
-        title: "Entry Submitted",
-        description: "Your time entry has been saved successfully.",
-        duration: 3000,
-      });
-
-      // Navigate immediately - the dashboard will refetch due to:
-      // 1. refetchOnMount: true in useTimeEntries hook
-      // 2. Cache invalidation above
-      router.push("/");
-
-      // Force a router refresh to ensure fresh data is loaded
-      router.refresh();
-    } catch (error) {
-      console.error("Failed to submit entry:", error);
+      queryClient.invalidateQueries({ queryKey: ["time-entries"], refetchType: "active" })
+      queryClient.invalidateQueries({ queryKey: ["weeklyHours"], refetchType: "active" })
+      toast({ title: "Timesheet Submitted", description: "Your timesheet has been saved.", duration: 3000 })
+      router.push("/")
+      router.refresh()
+    } catch (e) {
       toast({
         title: "Submission Failed",
-        description: error instanceof Error ? error.message : "Unable to save the entry. Please try again.",
+        description: e instanceof Error ? e.message : "Please try again.",
         variant: "destructive",
-      });
-      setIsSubmitting(false);
+      })
+      setIsSubmitting(false)
     }
-  };
+  }
 
-  const isFormValid = jobId && startTime && endTime;
+  const isFormValid =
+    jobId &&
+    painters.some((p) => p.painterId && p.startTime && p.endTime) &&
+    painters.filter((p) => p.painterId).length === new Set(painters.filter((p) => p.painterId).map((p) => p.painterId)).size
 
   return (
     <Layout>
-      {/* Header */}
       <div className="bg-secondary text-white p-4 flex items-center sticky top-0 z-20 shadow-md">
-        <button
-          onClick={() => router.push("/")}
-          className="mr-4 text-gray-300 hover:text-white p-1"
-        >
+        <button onClick={() => router.push("/")} className="mr-4 text-gray-300 hover:text-white p-1">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-lg font-bold">New Entry</h1>
+        <h1 className="text-lg font-bold">New Timesheet</h1>
       </div>
 
-      {/* Tab Navigation */}
       <div className="bg-white border-b border-gray-200 sticky top-[60px] z-10">
-        <div className="max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-          <div className="flex">
-            <button
-              onClick={() => setActiveTab("time-entry")}
-              className={`flex-1 py-3 px-4 text-center font-semibold text-sm transition-all relative ${activeTab === "time-entry"
-                ? "text-primary"
-                : "text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Clock size={18} />
-                Time Entry
-              </div>
-              {activeTab === "time-entry" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("sundry-entry")}
-              className={`flex-1 py-3 px-4 text-center font-semibold text-sm transition-all relative ${activeTab === "sundry-entry"
-                ? "text-primary"
-                : "text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Package size={18} />
-                Sundry Entry
-              </div>
-              {activeTab === "sundry-entry" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-              )}
-            </button>
-          </div>
+        <div className="max-w-2xl md:max-w-none xl:max-w-2xl mx-auto flex">
+          <button
+            onClick={() => setActiveTab("crew")}
+            className={`flex-1 py-3 px-4 text-center font-semibold text-sm ${activeTab === "crew" ? "text-primary border-b-2 border-primary" : "text-gray-500"}`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <Clock size={18} /> Crew &amp; Time
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("sundry")}
+            className={`flex-1 py-3 px-4 text-center font-semibold text-sm ${activeTab === "sundry" ? "text-primary border-b-2 border-primary" : "text-gray-500"}`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <Package size={18} /> Sundry
+            </span>
+          </button>
         </div>
       </div>
 
       <main className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-6 xl:p-4 space-y-6 pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-
-          {/* Time Entry Tab Content */}
-          {activeTab === "time-entry" && (
+          {activeTab === "crew" && (
             <>
-              {/* Job Details Section */}
               <section>
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Job Details</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Job &amp; Date</h2>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="job" className="text-gray-700 font-semibold mb-2 block">
-                      Job <span className="text-red-500">*</span>
-                    </Label>
+                    <Label className="text-gray-700 font-semibold mb-2 block">Job *</Label>
                     {isLoadingProjects ? (
-                      <div className="flex items-center space-x-2 p-3 border rounded-md bg-gray-50 text-gray-500">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Loading jobs...</span>
+                      <div className="flex items-center gap-2 p-3 border rounded-md bg-gray-50 text-gray-500">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Loading jobs...
                       </div>
                     ) : (
                       <select
-                        id="job"
-                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none"
                         value={jobId}
                         onChange={(e) => setJobId(e.target.value)}
                       >
-                        <option value="" disabled>Select a job</option>
-                        {projects?.map(job => (
-                          <option key={job.id} value={job.id}>{job.name}</option>
+                        <option value="">Select a job</option>
+                        {projects?.map((j) => (
+                          <option key={j.id} value={j.id}>{j.name}</option>
                         ))}
                       </select>
                     )}
                   </div>
-
                   <div>
-                    <Label htmlFor="date" className="text-gray-700 font-semibold mb-2 block">
-                      Date <span className="text-red-500">*</span>
-                    </Label>
+                    <Label className="text-gray-700 font-semibold mb-2 block">Date *</Label>
                     <div className="relative">
                       <input
-                        id="date"
                         type="date"
+                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors"
                       />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('date') as HTMLInputElement;
-                          if (input?.showPicker) {
-                            input.showPicker();
-                          } else {
-                            input?.focus();
-                            input?.click();
-                          }
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-                      >
-                        <Calendar size={20} />
-                      </button>
+                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     </div>
                   </div>
                 </div>
               </section>
 
-              {/* Time Details Section */}
               <section>
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Time Details</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="start-time" className="text-gray-700 font-semibold mb-2 block">
-                      Start Time <span className="text-red-500">*</span>
-                    </Label>
-                    <div className="relative">
-                      <input
-                        id="start-time"
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('start-time') as HTMLInputElement;
-                          if (input?.showPicker) {
-                            input.showPicker();
-                          } else {
-                            input?.focus();
-                            input?.click();
-                          }
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
-                      >
-                        <Clock size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="end-time" className="text-gray-700 font-semibold mb-2 block">
-                      End Time <span className="text-red-500">*</span>
-                    </Label>
-                    <div className="relative">
-                      <input
-                        id="end-time"
-                        type="time"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('end-time') as HTMLInputElement;
-                          if (input?.showPicker) {
-                            input.showPicker();
-                          } else {
-                            input?.focus();
-                            input?.click();
-                          }
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
-                      >
-                        <Clock size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="lunch-start" className="text-gray-700 font-semibold mb-2 block">
-                      Lunch Start
-                    </Label>
-                    <div className="relative">
-                      <input
-                        id="lunch-start"
-                        type="time"
-                        value={lunchStart}
-                        onChange={(e) => setLunchStart(e.target.value)}
-                        className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('lunch-start') as HTMLInputElement;
-                          if (input?.showPicker) {
-                            input.showPicker();
-                          } else {
-                            input?.focus();
-                            input?.click();
-                          }
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
-                      >
-                        <Clock size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="lunch-end" className="text-gray-700 font-semibold mb-2 block">
-                      Lunch End
-                    </Label>
-                    <div className="relative">
-                      <input
-                        id="lunch-end"
-                        type="time"
-                        value={lunchEnd}
-                        onChange={(e) => setLunchEnd(e.target.value)}
-                        className="w-full h-12 px-3 pr-10 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none cursor-pointer hover:border-gray-400 transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('lunch-end') as HTMLInputElement;
-                          if (input?.showPicker) {
-                            input.showPicker();
-                          } else {
-                            input?.focus();
-                            input?.click();
-                          }
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer z-10"
-                      >
-                        <Clock size={20} />
-                      </button>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-800">Crew</h2>
+                  <button
+                    type="button"
+                    onClick={addPainter}
+                    className="flex items-center gap-1 text-primary font-semibold text-sm"
+                  >
+                    <UserPlus size={18} /> Add painter
+                  </button>
                 </div>
+                {isLoadingPainters ? (
+                  <div className="p-4 border rounded-lg bg-gray-50 text-gray-500">Loading painters...</div>
+                ) : (
+                  <div className="space-y-4">
+                    {painters.map((row, index) => (
+                      <div key={index} className="p-4 rounded-lg border border-gray-200 bg-gray-50/50 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-gray-600 text-sm">Painter {index + 1}</Label>
+                          {painters.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removePainter(index)}
+                              className="text-red-600 hover:text-red-700 p-1"
+                              aria-label="Remove painter"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                        <select
+                          className="w-full h-11 px-3 rounded-md border border-gray-300 bg-white text-base focus:ring-2 focus:ring-primary outline-none"
+                          value={row.painterId}
+                          onChange={(e) => updatePainter(index, "painterId", e.target.value)}
+                        >
+                          <option value="">Select painter</option>
+                          {paintersList.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs text-gray-500">Start</Label>
+                            <input
+                              type="time"
+                              className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                              value={row.startTime}
+                              onChange={(e) => updatePainter(index, "startTime", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500">End</Label>
+                            <input
+                              type="time"
+                              className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                              value={row.endTime}
+                              onChange={(e) => updatePainter(index, "endTime", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500">Lunch start</Label>
+                            <input
+                              type="time"
+                              className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                              value={row.lunchStart}
+                              onChange={(e) => updatePainter(index, "lunchStart", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500">Lunch end</Label>
+                            <input
+                              type="time"
+                              className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                              value={row.lunchEnd}
+                              onChange={(e) => updatePainter(index, "lunchEnd", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        {row.startTime && row.endTime && (
+                          <p className="text-xs text-gray-500">
+                            Hours: {computeHours(row.startTime, row.endTime, row.lunchStart, row.lunchEnd)}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
-              {/* Additional Information Section */}
               <section>
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Additional Information</h2>
-                <div className="space-y-4">
-                  <div>
-                    <TextAreaField
-                      id="notes"
-                      label="Notes"
-                      placeholder="Add any notes about the work performed..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={4}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Notes</h2>
+                <TextAreaField
+                  id="notes"
+                  label="Notes"
+                  placeholder="Notes for this timesheet..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  className="w-full"
+                />
               </section>
 
-              {/* Action Buttons - Time Entry */}
               <section className="pt-4 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={() => router.push("/")}
                     disabled={isSubmitting}
-                    className="flex-1 h-12 px-4 rounded-md border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 h-12 px-4 rounded-md border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <PrimaryButton
                     onClick={handleSubmit}
                     disabled={!isFormValid || isSubmitting}
-                    className="flex-1 text-lg shadow-md cursor-pointer hover:shadow-lg hover:bg-primary/85 transition-all"
+                    className="flex-1 text-lg shadow-md"
                   >
                     {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Submitting...
-                      </>
+                      <><Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> Submitting...</>
                     ) : (
-                      <>
-                        <Save className="mr-2" size={20} />
-                        Submit Entry
-                      </>
+                      <><Save className="mr-2 inline" size={20} /> Submit Timesheet</>
                     )}
                   </PrimaryButton>
                 </div>
@@ -536,90 +384,41 @@ export default function NewEntry() {
             </>
           )}
 
-          {/* Sundry Entry Tab Content */}
-          {activeTab === "sundry-entry" && (
+          {activeTab === "sundry" && (
             <>
-              {/* Sundry Items Section */}
               <section>
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Sundry Used Today</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  Use the + and - buttons to track the quantity of each sundry item used today.
-                </p>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Sundry Used (for this timesheet)</h2>
+                <p className="text-sm text-gray-500 mb-4">Add quantities used. Submit from the Crew &amp; Time tab.</p>
                 <div className="space-y-3">
                   {SUNDRY_ITEMS.map((itemName) => {
-                    const quantity = getItemQuantity(itemName);
+                    const q = getItemQuantity(itemName)
                     return (
                       <div
                         key={itemName}
-                        className={`flex items-center justify-between p-4 rounded-lg border transition-all ${quantity > 0
-                          ? "bg-primary/5 border-primary/30"
-                          : "bg-white border-gray-200 hover:border-gray-300"
-                          }`}
+                        className={`flex items-center justify-between p-4 rounded-lg border ${q > 0 ? "bg-primary/5 border-primary/30" : "bg-white border-gray-200"}`}
                       >
-                        <span className={`font-medium ${quantity > 0 ? "text-primary" : "text-gray-700"}`}>
-                          {itemName}
-                        </span>
+                        <span className={`font-medium ${q > 0 ? "text-primary" : "text-gray-700"}`}>{itemName}</span>
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
                             onClick={() => handleDecrement(itemName)}
-                            disabled={quantity === 0}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${quantity > 0
-                              ? "bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
-                              : "bg-gray-50 text-gray-300 cursor-not-allowed"
-                              }`}
+                            disabled={q === 0}
+                            className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Minus size={18} />
                           </button>
-                          <span
-                            className={`w-8 text-center font-bold text-lg ${quantity > 0 ? "text-primary" : "text-gray-400"
-                              }`}
-                          >
-                            {quantity}
-                          </span>
+                          <span className={`w-8 text-center font-bold ${q > 0 ? "text-primary" : "text-gray-400"}`}>{q}</span>
                           <button
                             type="button"
                             onClick={() => handleIncrement(itemName)}
-                            className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-all cursor-pointer shadow-md hover:shadow-lg"
+                            className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90"
                           >
                             <Plus size={18} />
                           </button>
                         </div>
                       </div>
-                    );
+                    )
                   })}
-                </div>
-              </section>
-
-              {/* Action Buttons - Sundry Entry */}
-              <section className="pt-4 border-t border-gray-200 mb-20">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    onClick={() => router.push("/")}
-                    className="flex-1 h-12 px-4 rounded-md border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <PrimaryButton
-                    onClick={() => {
-                      // Log current sundry items data to console
-                      console.log("=== SUNDRY ENTRY FORM SUBMISSION ===");
-                      console.log("Sundry Items:", sundryItems);
-                      console.log("Total Items with quantity > 0:", sundryItems.length);
-                      console.log("====================================");
-
-                      toast({
-                        title: "Sundry Data Logged",
-                        description: `${sundryItems.length} sundry item(s) recorded. Check the browser console for details.`,
-                        duration: 3000,
-                      });
-                    }}
-                    disabled={sundryItems.length === 0}
-                    className="flex-1 text-lg shadow-md cursor-pointer hover:shadow-lg hover:bg-primary/85 transition-all"
-                  >
-                    <Save className="mr-2" size={20} />
-                    Save Sundry Items
-                  </PrimaryButton>
                 </div>
               </section>
             </>
@@ -627,5 +426,5 @@ export default function NewEntry() {
         </div>
       </main>
     </Layout>
-  );
+  )
 }

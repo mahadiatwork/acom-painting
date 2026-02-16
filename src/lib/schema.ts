@@ -20,15 +20,18 @@ export const timeEntries = pgTable("time_entries", {
   jobId: text("job_id").notNull(),
   jobName: text("job_name").notNull(),
   date: text("date").notNull(),
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time").notNull(),
-  lunchStart: text("lunch_start").notNull(),
-  lunchEnd: text("lunch_end").notNull(),
-  totalHours: text("total_hours").notNull(),
+  // Deprecated: per-painter fields (kept for backward compatibility; new flow uses timesheet_painters)
+  startTime: text("start_time").notNull().default(""),
+  endTime: text("end_time").notNull().default(""),
+  lunchStart: text("lunch_start").notNull().default(""),
+  lunchEnd: text("lunch_end").notNull().default(""),
+  totalHours: text("total_hours").notNull().default("0"),
   notes: text("notes").default(""),
   changeOrder: text("change_order").default(""),
   synced: boolean("synced").default(false).notNull(),
   createdAt: text("created_at").default(sql`now()`),
+  zohoTimeEntryId: varchar("zoho_time_entry_id"),
+  totalCrewHours: text("total_crew_hours").default("0"),
   // Sundry Items (all Number type in Zoho)
   maskingPaperRoll: text("masking_paper_roll").default("0"),
   plasticRoll: text("plastic_roll").default("0"),
@@ -48,6 +51,37 @@ export const timeEntries = pgTable("time_entries", {
   userIdIdx: index("user_id_idx").on(table.userId),
   dateIdx: index("date_idx").on(table.date),
   jobIdIdx: index("job_id_idx").on(table.jobId),
+}));
+
+export const painters = pgTable("painters", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  active: boolean("active").notNull().default(true),
+  createdAt: text("created_at").default(sql`now()`),
+  updatedAt: text("updated_at").default(sql`now()`),
+}, (table) => ({
+  nameIdx: index("painters_name_idx").on(table.name),
+  activeIdx: index("painters_active_idx").on(table.active),
+}));
+
+export const timesheetPainters = pgTable("timesheet_painters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timesheetId: varchar("timesheet_id").notNull(),
+  painterId: varchar("painter_id").notNull(),
+  painterName: text("painter_name").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  lunchStart: text("lunch_start").notNull().default(""),
+  lunchEnd: text("lunch_end").notNull().default(""),
+  totalHours: text("total_hours").notNull(),
+  zohoJunctionId: varchar("zoho_junction_id"),
+  createdAt: text("created_at").default(sql`now()`),
+}, (table) => ({
+  timesheetIdx: index("tp_timesheet_id_idx").on(table.timesheetId),
+  painterIdx: index("tp_painter_id_idx").on(table.painterId),
+  uniquePainter: unique("tp_timesheet_painter_unique").on(table.timesheetId, table.painterId),
 }));
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -88,3 +122,5 @@ export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type UserProject = typeof userProjects.$inferSelect;
+export type Painter = typeof painters.$inferSelect;
+export type TimesheetPainter = typeof timesheetPainters.$inferSelect;
