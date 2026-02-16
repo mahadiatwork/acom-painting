@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/painters
- * Returns all active painters for the Foreman's crew dropdown.
+ * Returns all painters for the Foreman's crew dropdown (no active filter).
  * Reads from Supabase (same DB the webhook writes to).
  *
  * PGRST205 "Could not find the table 'public.painters'" = NEXT_PUBLIC_SUPABASE_URL
@@ -18,7 +18,6 @@ export async function GET() {
     const { data: list, error } = await admin
       .from('painters')
       .select('id, name, email, phone')
-      .eq('active', true)
       .order('name')
 
     if (error) {
