@@ -104,9 +104,13 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
         notes: data.notes,
         sundryItems: Object.keys(sundryItems).length > 0 ? sundryItems : undefined,
       })
-      zohoTimeEntryId = parent.id
+      const newId = parent?.id
+      if (!newId) {
+        throw new Error('Zoho createTimeEntryParent did not return an id')
+      }
+      zohoTimeEntryId = newId
       await db.update(timeEntries)
-        .set({ zohoTimeEntryId: parent.id })
+        .set({ zohoTimeEntryId: newId })
         .where(eq(timeEntries.id, data.id))
       console.log(`[Sync] Created Zoho parent Time_Entry: ${zohoTimeEntryId}`)
     } catch (err: any) {
@@ -115,9 +119,16 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
     }
   }
 
-  // Phase 2: Create junction records for painters that don't have zoho_junction_id
+  // Phase 2: Create junction records for painters that don't have zoho_junction_id.
+  // Only sync painters that have a Zoho-style id (long numeric). Skip test/seed ids like "dummy-001"
+  // because Zoho Painters lookup requires an actual Zoho Painter record id.
   const paintersToSync = data.painters.filter(p => !p.zohoJunctionId)
   for (const p of paintersToSync) {
+    const isZohoPainterId = /^\d{10,}$/.test(String(p.painterId))
+    if (!isZohoPainterId) {
+      console.warn(`[Sync] Skipping junction for painter ${p.painterId} – not a Zoho Painter record id (use painters synced from Zoho CRM for junction sync).`)
+      continue
+    }
     try {
       const junction = await zohoClient.createTimesheetPainterEntry({
         zohoTimeEntryId,
@@ -130,10 +141,13 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
         totalHours: p.totalHours,
         timezone,
       })
-      await db.update(timesheetPainters)
-        .set({ zohoJunctionId: junction.id })
-        .where(eq(timesheetPainters.id, p.id))
-      console.log(`[Sync] Created Zoho junction for painter ${p.painterId}: ${junction.id}`)
+      const junctionId = junction?.id
+      if (junctionId) {
+        await db.update(timesheetPainters)
+          .set({ zohoJunctionId: junctionId })
+          .where(eq(timesheetPainters.id, p.id))
+        console.log(`[Sync] Created Zoho junction for painter ${p.painterId}: ${junctionId}`)
+      }
     } catch (err: any) {
       console.error(`[Sync] Failed to create Zoho junction for painter ${p.painterId}:`, err?.message || err)
     }

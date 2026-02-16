@@ -16,24 +16,11 @@ void automation.Create_painter_in_supabase(int painterId)
 	phoneVal = ifnull(rec.get("Phone"), "");
 	activeVal = rec.get("Active");
 
-	// 3. Normalize Active boolean
+	// 3. Normalize Active boolean (if/else — no ternary for Deluge compatibility)
 	activeBool = false;
 	if(activeVal == true || activeVal == 1 || activeVal == "1")
 	{
 		activeBool = true;
-	}
-
-	// 4. Escape double quotes for JSON (so name/email/phone with " don't break JSON)
-	nameStr = nameVal.replace("\"", "\\\"");
-	emailStr = "";
-	if(emailVal != null && emailVal != "")
-	{
-		emailStr = emailVal.toString().replace("\"", "\\\"");
-	}
-	phoneStr = "";
-	if(phoneVal != null && phoneVal != "")
-	{
-		phoneStr = phoneVal.toString().replace("\"", "\\\"");
 	}
 	if(activeBool)
 	{
@@ -44,7 +31,20 @@ void automation.Create_painter_in_supabase(int painterId)
 		activeJson = "false";
 	}
 
-	// 5. Build JSON body string (required: API expects valid JSON, not Map.toString())
+	// 4. Escape double quotes so name/email/phone with " don't break JSON
+	nameStr = nameVal.toString().replace("\"", "\\\"");
+	emailStr = "";
+	if(emailVal != null && emailVal != "")
+	{
+		emailStr = emailVal.toString().replace("\"", "\\\"");
+	}
+	phoneStr = "";
+	if(phoneVal != null && phoneVal != "")
+	{
+		phoneStr = phoneVal.toString().replace("\"", "\\\"");
+	}
+
+	// 5. Build JSON body string (required: webhook expects valid JSON; Map.toString() is NOT valid JSON)
 	jsonBody = "{\"id\":\"" + idStr + "\",\"Name\":\"" + nameStr + "\",\"Email\":\"" + emailStr + "\",\"Phone\":\"" + phoneStr + "\",\"Active\":" + activeJson + "}";
 
 	// 6. Get Org Variable
@@ -56,18 +56,18 @@ void automation.Create_painter_in_supabase(int painterId)
 		return;
 	}
 
+	secret = secret.trim();
+
 	// 7. Headers
 	headers = Map();
-	headers.put("Authorization", "Bearer " + secret.trim());
+	headers.put("Authorization", "Bearer " + secret);
 	headers.put("Content-Type", "application/json");
-	// Uncomment next line to see the real error in Zoho log when webhook returns 500:
-	// headers.put("X-Webhook-Debug", "true");
 
 	url = "https://acom-painting.vercel.app/api/webhooks/painters";
 
 	info "Syncing Painter " + idStr;
 
-	// 8. Invoke Webhook — send raw JSON with body (not parameters; parameters = form data)
+	// 8. Invoke Webhook — use body : jsonBody (NOT parameters; parameters sends form data, not JSON)
 	response = invokeurl
 	[
 		url : url
@@ -78,13 +78,13 @@ void automation.Create_painter_in_supabase(int painterId)
 
 	info response;
 
-	// 9. Validate response (invokeurl often returns string; success is in JSON body)
+	// 9. Validate response
 	if(response != null && (response.contains("\"success\":true") || (response.get("success") == true)))
 	{
-		info "SUCCESS: Painter synced";
+		info "SUCCESS: Painter " + idStr + " synced to Supabase";
 	}
 	else
 	{
-		info "ERROR: Sync failed - " + response;
+		info "ERROR: Failed to sync Painter " + idStr + " - " + response;
 	}
 }

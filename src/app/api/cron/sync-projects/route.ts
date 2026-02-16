@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { zohoClient } from '@/lib/zoho'
 import { db } from '@/lib/db'
-import { projects, userProjects, users, painters } from '@/lib/schema'
+import { projects, userProjects, users } from '@/lib/schema'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { eq, inArray } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
@@ -199,39 +200,37 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // STEP 3: Sync Painters from Zoho
+    // STEP 3: Sync Painters from Zoho to Supabase (same DB the portal uses)
     // ---------------------------------------------------------
     let paintersSynced = 0
     try {
       const zohoPainters = await zohoClient.getPainters()
       if (zohoPainters && zohoPainters.length > 0) {
+        const supabase = createAdminClient()
+        const nowIso = new Date().toISOString()
         for (const p of zohoPainters) {
           const id = p.id
           const name = (p as { Name?: string }).Name ?? ''
           if (!id || !name) continue
-          await db.insert(painters).values({
-            id: String(id),
-            name: String(name),
-            email: (p as { Email?: string }).Email ?? null,
-            phone: (p as { Phone?: string }).Phone ?? null,
-            active: (p as { Active?: boolean }).Active !== false,
-            updatedAt: new Date().toISOString(),
-          }).onConflictDoUpdate({
-            target: painters.id,
-            set: {
+          const active = (p as { Active?: boolean }).Active !== false
+          const { error } = await supabase.from('painters').upsert(
+            {
+              id: String(id),
               name: String(name),
               email: (p as { Email?: string }).Email ?? null,
               phone: (p as { Phone?: string }).Phone ?? null,
-              active: (p as { Active?: boolean }).Active !== false,
-              updatedAt: new Date().toISOString(),
+              active,
+              updated_at: nowIso,
             },
-          })
-          paintersSynced++
+            { onConflict: 'id' }
+          )
+          if (!error) paintersSynced++
+          else console.warn('[Cron] Painter upsert failed:', id, error.message)
         }
-        console.log(`[Cron] Synced ${paintersSynced} painters to Postgres`)
+        console.log(`[Cron] Synced ${paintersSynced} painters to Supabase`)
       }
-    } catch (dbError: any) {
-      console.error('[Cron] Postgres painters sync failed:', dbError?.message || dbError)
+    } catch (err: any) {
+      console.error('[Cron] Painters sync failed:', err?.message || err)
     }
 
     return NextResponse.json({ 

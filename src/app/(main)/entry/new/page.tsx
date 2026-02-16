@@ -216,8 +216,9 @@ export default function NewEntry() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-4 md:p-6 xl:p-4 space-y-6 pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+      {/* max-h keeps content above the fixed bottom nav; overflow-y-auto makes this the scroll container */}
+      <main className="flex-1 min-h-0 overflow-y-auto max-h-[calc(100vh-11rem)]">
+        <div className="p-4 md:p-6 xl:p-4 space-y-6 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto" style={{ paddingBottom: "max(6rem, calc(5rem + env(safe-area-inset-bottom, 0px)))" }}>
           {activeTab === "crew" && (
             <>
               <section>

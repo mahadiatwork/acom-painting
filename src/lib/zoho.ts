@@ -210,9 +210,11 @@ class ZohoClient {
       }
       const token = await this.getAccessToken();
       const entryName = `Timesheet - ${data.date}`;
+      // Time_Entries module: job/project lookup. API name may be "Job" or "Deals" – set ZOHO_TIME_ENTRY_JOB_FIELD if Zoho returns INVALID_DATA on "Job"
+      const jobField = process.env.ZOHO_TIME_ENTRY_JOB_FIELD || 'Job';
       const zohoPayload: Record<string, any> = {
         Name: entryName,
-        Job: { id: data.projectId },
+        [jobField]: { id: data.projectId },
         Portal_User: { id: data.foremanId },
         Date: data.date,
         Time_Entry_Note: data.notes || '',
@@ -228,8 +230,23 @@ class ZohoClient {
         { data: [zohoPayload] },
         { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
       );
-      console.log('[Zoho] Time entry parent created:', response.data?.data?.[0]?.id);
-      return response.data.data[0];
+      const first = response.data?.data?.[0];
+      const code = (first as any)?.code;
+      const status = (first as any)?.status;
+      if (status === 'error' || code === 'INVALID_DATA' || code === 'ERROR') {
+        const msg = (first as any)?.message || 'invalid data';
+        const apiName = (first as any)?.details?.api_name;
+        const errMsg = apiName ? `Zoho Time_Entries: ${msg} (field: ${apiName}). Check that the Job id exists in Zoho.` : `Zoho Time_Entries: ${msg}`;
+        console.error('[Zoho] Time entry parent error:', JSON.stringify(response.data, null, 2));
+        throw new Error(errMsg);
+      }
+      const id = first?.id ?? (first as any)?.details?.id;
+      if (!id) {
+        console.error('[Zoho] Time entry parent response missing id. Full response:', JSON.stringify(response.data, null, 2));
+        throw new Error('Zoho did not return the created Time Entry id. Check API response format.');
+      }
+      console.log('[Zoho] Time entry parent created:', id);
+      return { id: String(id) };
     } catch (error: any) {
       console.error('[Zoho] API Error (createTimeEntryParent):', error?.message || error);
       if (error?.response) {
@@ -260,9 +277,10 @@ class ZohoClient {
       const token = await this.getAccessToken();
       const startDateTime = this.formatZohoDateTime(data.date, data.startTime, data.timezone);
       const endDateTime = this.formatZohoDateTime(data.date, data.endTime, data.timezone);
+      // Time_Entries_X_Painters: only Time_Entries + Painters (no Job). Per Zoho API names.
       const zohoPayload: Record<string, any> = {
-        Time_Entry: { id: data.zohoTimeEntryId },
-        Painter: { id: data.painterId },
+        Time_Entries: { id: data.zohoTimeEntryId },
+        Painters: { id: data.painterId },
         Start_Time: startDateTime,
         End_Time: endDateTime,
         Total_Hours: data.totalHours,
@@ -277,7 +295,20 @@ class ZohoClient {
         { data: [zohoPayload] },
         { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
       );
-      return response.data.data[0];
+      const first = response.data?.data?.[0];
+      const status = (first as any)?.status;
+      const code = (first as any)?.code;
+      if (status === 'error' || code === 'INVALID_DATA' || code === 'ERROR') {
+        const msg = (first as any)?.message || 'Zoho junction error';
+        console.error('[Zoho] Junction API returned error:', JSON.stringify(response.data, null, 2));
+        throw new Error(`Zoho Time_Entries_X_Painters: ${msg}. Painters lookup expects a Zoho Painter record id (e.g. from Zoho CRM), not a test id like dummy-001.`);
+      }
+      const id = first?.id ?? (first as any)?.details?.id;
+      if (!id) {
+        console.error('[Zoho] Junction response missing id:', JSON.stringify(response.data, null, 2));
+        throw new Error('Zoho did not return the created junction record id.');
+      }
+      return { id: String(id) };
     } catch (error: any) {
       console.error('[Zoho] API Error (createTimesheetPainterEntry):', error?.message || error);
       if (error?.response) {
