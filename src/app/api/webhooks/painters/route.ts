@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-/** Incoming payload from Zoho (capitalized keys). */
+/** Incoming payload from Zoho (capitalized keys). Zoho may send Active as boolean, 1/0, or "1"/"0". */
 interface ZohoPainterPayload {
   id?: string
   Name?: string
@@ -10,8 +10,8 @@ interface ZohoPainterPayload {
   email?: string
   Phone?: string
   phone?: string
-  Active?: boolean
-  active?: boolean
+  Active?: boolean | number | string
+  active?: boolean | number | string
 }
 
 /** Row shape for Supabase painters table (lowercase columns). */
@@ -82,11 +82,12 @@ export async function POST(request: NextRequest) {
       payload.Phone !== undefined && payload.Phone !== null && payload.Phone !== ''
         ? String(payload.Phone).trim()
         : null
+    const activeVal = payload.Active ?? payload.active
     const active =
-      payload.Active === true ||
-      payload.Active === 1 ||
-      payload.Active === '1' ||
-      (payload.active !== false && payload.active !== 0 && payload.active !== '0')
+      activeVal === true ||
+      activeVal === 1 ||
+      activeVal === '1' ||
+      (activeVal !== false && activeVal !== 0 && activeVal !== '0')
 
     if (!id || !name) {
       return NextResponse.json(
