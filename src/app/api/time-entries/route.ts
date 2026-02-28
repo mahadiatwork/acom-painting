@@ -24,6 +24,8 @@ const timesheetSchema = z.object({
   date: z.string().optional(),
   notes: z.string().optional().default(''),
   changeOrder: z.string().nullable().optional().default(''),
+  extraHours: z.union([z.string(), z.number()]).optional().default(0),
+  extraWorkDescription: z.string().optional().default(''),
   sundryItems: z.array(z.object({
     sundryItem: z.string(),
     quantity: z.number(),
@@ -129,6 +131,8 @@ export async function GET(request: NextRequest) {
       entries.push({
         ...te,
         totalCrewHours: parseFloat(te.totalCrewHours ?? '0'),
+        extraHours: te.extraHours ?? '0',
+        extraWorkDescription: te.extraWorkDescription ?? '',
         painters,
         sundryItems: sundry,
       })
@@ -157,6 +161,12 @@ export async function POST(request: NextRequest) {
     const validated = timesheetSchema.parse(payload)
     const today = new Date().toISOString().split('T')[0]
     const date = validated.date || today
+
+    const rawExtra = validated.extraHours
+    const extraHoursNum = typeof rawExtra === 'string' ? parseFloat(rawExtra) || 0 : Number(rawExtra) ?? 0
+    const extraHoursValid = Math.max(0, Math.min(24, extraHoursNum))
+    const extraHoursStr = String(extraHoursValid)
+    const extraWorkDescription = (validated.extraWorkDescription ?? '').trim()
 
     const paintersWithHours = validated.painters.map(p => {
       const totalHours = computeTotalHours(p.startTime, p.endTime, p.lunchStart || '', p.lunchEnd || '')
@@ -202,6 +212,8 @@ export async function POST(request: NextRequest) {
       miniCover: sundryData.miniCover || '0',
       masks: sundryData.masks || '0',
       brickTapeRoll: sundryData.brickTapeRoll || '0',
+      extraHours: extraHoursStr,
+      extraWorkDescription,
     }
 
     try {
@@ -261,6 +273,8 @@ export async function POST(request: NextRequest) {
       zohoTimeEntryId: undefined as string | undefined,
       totalCrewHours: String(totalCrewHours),
       painters: paintersForSync,
+      extraHours: extraHoursStr,
+      extraWorkDescription,
       ...sundryData,
     }
 
@@ -284,6 +298,8 @@ export async function POST(request: NextRequest) {
       date,
       notes: validated.notes,
       totalCrewHours,
+      extraHours: extraHoursStr,
+      extraWorkDescription,
       synced: false,
       painters: paintersWithHours.map(p => ({
         painterId: p.painterId,

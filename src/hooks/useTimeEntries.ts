@@ -23,6 +23,8 @@ export interface TimeEntry {
   synced: boolean
   notes?: string
   changeOrder?: string
+  extraHours?: string
+  extraWorkDescription?: string
   painters: TimeEntryPainter[]
   sundryItems?: Record<string, string>
   // Legacy flat sundry (API may return either)

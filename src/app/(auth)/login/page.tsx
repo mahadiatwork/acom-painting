@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
+import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -63,6 +64,7 @@ export default function Login() {
               width={200}
               height={128}
               className="h-32 w-auto"
+              suppressHydrationWarning
             />
           </div>
           <div className="h-1 w-16 bg-primary rounded-full mb-2"></div>
@@ -99,8 +101,15 @@ export default function Login() {
             />
 
             <div className="pt-4">
-              <PrimaryButton type="submit" disabled={loading} className="h-14 text-lg">
-                {loading ? "Logging in..." : "Login"}
+              <PrimaryButton type="submit" disabled={loading} className="h-14 text-lg flex items-center justify-center gap-2">
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                    <span>Logging in...</span>
+                  </>
+                ) : (
+                  "Login"
+                )}
               </PrimaryButton>
             </div>
 

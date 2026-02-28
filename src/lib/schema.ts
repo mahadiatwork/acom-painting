@@ -47,6 +47,9 @@ export const timeEntries = pgTable("time_entries", {
   miniCover: text("mini_cover").default("0"),
   masks: text("masks").default("0"),
   brickTapeRoll: text("brick_tape_roll").default("0"),
+  // Extra Work / T&M (tracked separately from base crew hours)
+  extraHours: text("extra_hours").notNull().default("0"),
+  extraWorkDescription: text("extra_work_description").default(""),
 }, (table) => ({
   userIdIdx: index("user_id_idx").on(table.userId),
   dateIdx: index("date_idx").on(table.date),

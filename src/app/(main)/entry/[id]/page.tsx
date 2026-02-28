@@ -165,7 +165,7 @@ export default function EntryDetail() {
           <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
               <Package size={20} className="mr-2 text-primary" />
-              Sundry Items Used
+              Sundries Used
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {sundryItems.map((item) => (
@@ -174,6 +174,24 @@ export default function EntryDetail() {
                   <span className="text-primary font-bold text-lg">{item.quantity}</span>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {entry.extraHours && parseFloat(entry.extraHours) > 0 && (
+          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Extra Work</h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Hours: </span>
+                <span className="font-medium text-gray-900">{entry.extraHours} hrs</span>
+              </div>
+              {entry.extraWorkDescription && (
+                <div>
+                  <span className="text-gray-500 block mb-1">Description:</span>
+                  <p className="text-gray-700 whitespace-pre-wrap">{entry.extraWorkDescription}</p>
+                </div>
+              )}
             </div>
           </section>
         )}

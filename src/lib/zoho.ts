@@ -203,6 +203,8 @@ class ZohoClient {
     date: string;        // YYYY-MM-DD
     notes?: string;
     sundryItems?: Record<string, number>;
+    extraHours?: number | string;
+    extraWorkDescription?: string;
   }): Promise<{ id: string }> {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
@@ -223,6 +225,16 @@ class ZohoClient {
         Object.entries(data.sundryItems).forEach(([apiName, quantity]) => {
           if (quantity > 0) zohoPayload[apiName] = quantity;
         });
+      }
+      const extraHoursNum = data.extraHours != null ? Number(data.extraHours) : 0;
+      if (extraHoursNum > 0) {
+        const extraHoursField = process.env.ZOHO_TIME_ENTRY_EXTRA_HOURS_FIELD || 'Extra_Hours';
+        // Zoho Single Line field expects text, not number
+        zohoPayload[extraHoursField] = String(extraHoursNum);
+      }
+      if (data.extraWorkDescription?.trim()) {
+        const extraDescField = process.env.ZOHO_TIME_ENTRY_EXTRA_DESCRIPTION_FIELD || 'Extra_Work_Description';
+        zohoPayload[extraDescField] = data.extraWorkDescription.trim();
       }
       console.log('[Zoho] Creating time entry parent:', JSON.stringify(zohoPayload, null, 2));
       const response = await axios.post(

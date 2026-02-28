@@ -24,6 +24,8 @@ export interface TimesheetData {
   date: string
   notes?: string
   changeOrder?: string
+  extraHours?: string
+  extraWorkDescription?: string
   synced: boolean
   zohoTimeEntryId?: string
   totalCrewHours: string
@@ -103,6 +105,8 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
         date: data.date,
         notes: data.notes,
         sundryItems: Object.keys(sundryItems).length > 0 ? sundryItems : undefined,
+        extraHours: data.extraHours,
+        extraWorkDescription: data.extraWorkDescription,
       })
       const newId = parent?.id
       if (!newId) {
@@ -197,6 +201,8 @@ export async function retryFailedSyncs(foremanEmail: string, foremanUserId: stri
         date: te.date,
         notes: te.notes ?? undefined,
         changeOrder: te.changeOrder ?? undefined,
+        extraHours: te.extraHours ?? undefined,
+        extraWorkDescription: te.extraWorkDescription ?? undefined,
         synced: te.synced,
         zohoTimeEntryId: te.zohoTimeEntryId ?? undefined,
         totalCrewHours: te.totalCrewHours ?? '0',

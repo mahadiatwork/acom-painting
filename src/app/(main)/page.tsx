@@ -25,6 +25,7 @@ export default function Dashboard() {
   const { data: weeklyHours = 0, isLoading: isLoadingHours, isError: isHoursError } = useWeeklyHours();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -62,16 +63,16 @@ export default function Dashboard() {
   }, [router]);
 
   const handleLogout = async () => {
+    setLoggingOut(true);
     const supabase = createClient();
     const { error } = await supabase.auth.signOut();
 
     if (!error) {
-      // Clear local state
       setUser(null);
-      // Redirect to login
-      router.push("/login");
-      // Force a hard refresh to clear any cached data
-      router.refresh();
+      // Full page redirect so middleware sees cleared session and doesn't redirect back to dashboard
+      window.location.replace("/login");
+    } else {
+      setLoggingOut(false);
     }
   };
 
@@ -79,7 +80,7 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <Header user={loading ? "..." : userName} onLogout={handleLogout} />
+      <Header user={loading ? "..." : userName} onLogout={handleLogout} logoutLoading={loggingOut} />
 
       <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-6 overflow-y-auto pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
         {/* Main Action */}
@@ -147,6 +148,12 @@ export default function Dashboard() {
                       <span className="flex items-center gap-1"><CalendarDays size={12} /> {entry.date}</span>
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                       <span className="font-mono">{entry.totalCrewHours ?? 0} hrs</span>
+                      {parseFloat(entry.extraHours ?? '0') > 0 && (
+                        <>
+                          <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                          <span className="text-primary font-medium">+ {entry.extraHours} extra hrs</span>
+                        </>
+                      )}
                       {(entry.painters?.length ?? 0) > 0 && (
                         <>
                           <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
