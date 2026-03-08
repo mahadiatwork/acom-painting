@@ -18,6 +18,16 @@ const painterRowSchema = z.object({
   lunchEnd: z.string().optional().default(''),
 })
 
+const workPerformedEntrySchema = z.object({
+  category: z.enum(['interior', 'exterior']),
+  activityValue: z.string(),
+  activityLabel: z.string(),
+  quantity: z.number(),
+  paintGallonsUsed: z.number(),
+  primerGallonsUsed: z.number(),
+  primerSource: z.enum(['stock', 'retail']),
+})
+
 const timesheetSchema = z.object({
   jobId: z.string(),
   jobName: z.string(),
@@ -30,6 +40,7 @@ const timesheetSchema = z.object({
     sundryItem: z.string(),
     quantity: z.number(),
   })).optional().default([]),
+  workPerformed: z.array(workPerformedEntrySchema).optional().default([]),
   painters: z.array(painterRowSchema).min(1, 'At least one painter is required'),
 })
 

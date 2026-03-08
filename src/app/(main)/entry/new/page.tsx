@@ -5,26 +5,40 @@ import { useRouter } from "next/navigation"
 import { Layout } from "@/components/Layout"
 import { PrimaryButton } from "@/components/PrimaryButton"
 import { TextAreaField } from "@/components/FormFields"
-import { ArrowLeft, Save, Loader2, Calendar, Clock, Package, Plus, Minus, Trash2 } from "lucide-react"
+import { ArrowLeft, Save, Loader2, Calendar, Clock, Package, Plus, Minus, Trash2, ClipboardList, Pencil } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ChevronDown } from "lucide-react"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { useToast } from "@/hooks/use-toast"
 import { useProjects } from "@/hooks/useProjects"
 import { usePainters } from "@/hooks/usePainters"
 import { useQueryClient } from "@tanstack/react-query"
+import { WORK_PERFORMED_ACTIVITIES } from "@/config/workPerformed"
+import type { WorkPerformedCategoryKey } from "@/config/workPerformed"
 
-type TabType = "crew" | "sundry"
+type TabType = "crew" | "sundry" | "work"
 
 const DEFAULT_START = "07:30"
 const DEFAULT_END = "16:00"
 
 const LUNCH_DURATION_OPTIONS = [
-  { value: "", label: "No lunch" },
+  { value: "0", label: "0 min" },
   { value: "15", label: "15 min" },
   { value: "30", label: "30 min" },
   { value: "45", label: "45 min" },
-  { value: "60", label: "1 hr" },
+  { value: "60", label: "60 min" },
+  { value: "75", label: "75 min" },
+  { value: "90", label: "90 min" },
+  { value: "105", label: "105 min" },
+  { value: "120", label: "120 min" },
 ] as const
 
 const MINUTE_OPTIONS = ["00", "15", "30", "45"] as const
@@ -35,12 +49,23 @@ interface PainterRow {
   painterName: string
   startTime: string
   endTime: string
-  lunchDuration: string // "" | "15" | "30" | "45" | "60" (minutes)
+  lunchDuration: string // "0" | "15" | "30" | ... | "120" (minutes)
 }
 
 interface SundryItem {
   sundryItem: string
   quantity: number
+}
+
+/** Normalized saved Work Performed entry (one item in the list). */
+interface SavedWorkPerformedEntry {
+  category: WorkPerformedCategoryKey
+  activityValue: string
+  activityLabel: string
+  quantity: number
+  paintGallonsUsed: number
+  primerGallonsUsed: number
+  primerSource: "stock" | "retail"
 }
 
 const SUNDRY_ITEMS = [
@@ -65,7 +90,7 @@ const emptyPainterRow = (): PainterRow => ({
   painterName: "",
   startTime: "",
   endTime: "",
-  lunchDuration: "",
+  lunchDuration: "30",
 })
 
 function parseTimeToMinutes(time: string): number {
@@ -122,6 +147,7 @@ export default function NewEntry() {
   const [activeTab, setActiveTab] = useState<TabType>("crew")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Timesheet draft state (single form; tab switching does not unmount — all state persists)
   const [jobId, setJobId] = useState("")
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0])
   const [notes, setNotes] = useState("")
@@ -130,6 +156,17 @@ export default function NewEntry() {
   const [extraWorkChecked, setExtraWorkChecked] = useState(false)
   const [extraHours, setExtraHours] = useState("")
   const [extraWorkDescription, setExtraWorkDescription] = useState("")
+  // Work Performed (same draft; included in submit payload)
+  const [workPerformedCategory, setWorkPerformedCategory] = useState<WorkPerformedCategoryKey | "">("")
+  const [workPerformedActivityValue, setWorkPerformedActivityValue] = useState("")
+  const [workPerformedQuantity, setWorkPerformedQuantity] = useState("")
+  const [workPerformedPaintGallons, setWorkPerformedPaintGallons] = useState("")
+  const [workPerformedPrimerGallons, setWorkPerformedPrimerGallons] = useState("")
+  const [workPerformedPrimerSource, setWorkPerformedPrimerSource] = useState<"stock" | "retail">("stock")
+  const [workPerformedList, setWorkPerformedList] = useState<SavedWorkPerformedEntry[]>([])
+  const [workPerformedEditIndex, setWorkPerformedEditIndex] = useState<number | null>(null)
+  const [workPerformedValidationError, setWorkPerformedValidationError] = useState<string | null>(null)
+  const [jobSelectOpen, setJobSelectOpen] = useState(false)
 
   const { data: projects = [], isLoading: isLoadingProjects, isError: isProjectsError } = useProjects()
   const { data: paintersList = [], isLoading: isLoadingPainters, isError: isPaintersError } = usePainters()
@@ -144,7 +181,7 @@ export default function NewEntry() {
     } else {
       setPainters((prev) => [
         ...prev,
-        { painterId: p.id, painterName: p.name, startTime: DEFAULT_START, endTime: DEFAULT_END, lunchDuration: "" },
+        { painterId: p.id, painterName: p.name, startTime: DEFAULT_START, endTime: DEFAULT_END, lunchDuration: "30" },
       ])
     }
   }
@@ -184,6 +221,87 @@ export default function NewEntry() {
     })
   }
 
+  const validateWorkPerformedDraft = (): string | null => {
+    if (!workPerformedCategory || !workPerformedActivityValue) {
+      return "Select a category and an activity."
+    }
+    const parseOptionalNum = (s: string): { valid: boolean; value: number } => {
+      if (s === "") return { valid: true, value: 0 }
+      const n = parseFloat(s)
+      if (Number.isNaN(n)) return { valid: false, value: 0 }
+      if (n < 0) return { valid: false, value: 0 }
+      return { valid: true, value: n }
+    }
+    const q = parseOptionalNum(workPerformedQuantity)
+    if (!q.valid) return "Quantity must be a number ≥ 0."
+    const p = parseOptionalNum(workPerformedPaintGallons)
+    if (!p.valid) return "Paint gallons must be a number ≥ 0."
+    const pr = parseOptionalNum(workPerformedPrimerGallons)
+    if (!pr.valid) return "Primer gallons must be a number ≥ 0."
+    return null
+  }
+
+  const buildDraftWorkPerformedEntry = (): SavedWorkPerformedEntry | null => {
+    if (!workPerformedCategory || !workPerformedActivityValue) return null
+    const activities = WORK_PERFORMED_ACTIVITIES[workPerformedCategory]
+    const activity = activities.find((a) => a.value === workPerformedActivityValue)
+    const activityLabel = activity?.label ?? workPerformedActivityValue
+    return {
+      category: workPerformedCategory,
+      activityValue: workPerformedActivityValue,
+      activityLabel,
+      quantity: workPerformedQuantity === "" ? 0 : Math.max(0, parseFloat(workPerformedQuantity) || 0),
+      paintGallonsUsed: workPerformedPaintGallons === "" ? 0 : Math.max(0, parseFloat(workPerformedPaintGallons) || 0),
+      primerGallonsUsed: workPerformedPrimerGallons === "" ? 0 : Math.max(0, parseFloat(workPerformedPrimerGallons) || 0),
+      primerSource: workPerformedPrimerSource,
+    }
+  }
+
+  const addWorkPerformedActivity = () => {
+    const error = validateWorkPerformedDraft()
+    if (error) {
+      setWorkPerformedValidationError(error)
+      toast({ title: "Invalid activity", description: error, variant: "destructive" })
+      return
+    }
+    setWorkPerformedValidationError(null)
+    const entry = buildDraftWorkPerformedEntry()
+    if (!entry) return
+    if (workPerformedEditIndex !== null) {
+      setWorkPerformedList((prev) => prev.map((item, i) => (i === workPerformedEditIndex ? entry : item)))
+      setWorkPerformedEditIndex(null)
+    } else {
+      setWorkPerformedList((prev) => [...prev, entry])
+    }
+    setWorkPerformedActivityValue("")
+    setWorkPerformedQuantity("")
+    setWorkPerformedPaintGallons("")
+    setWorkPerformedPrimerGallons("")
+    setWorkPerformedPrimerSource("stock")
+  }
+
+  const startEditingWorkPerformed = (index: number) => {
+    const item = workPerformedList[index]
+    if (!item) return
+    setWorkPerformedCategory(item.category)
+    setWorkPerformedActivityValue(item.activityValue)
+    setWorkPerformedQuantity(item.quantity > 0 ? String(item.quantity) : "")
+    setWorkPerformedPaintGallons(item.paintGallonsUsed > 0 ? String(item.paintGallonsUsed) : "")
+    setWorkPerformedPrimerGallons(item.primerGallonsUsed > 0 ? String(item.primerGallonsUsed) : "")
+    setWorkPerformedPrimerSource(item.primerSource)
+    setWorkPerformedEditIndex(index)
+  }
+
+  const removeWorkPerformedActivity = (index: number) => {
+    setWorkPerformedList((prev) => prev.filter((_, i) => i !== index))
+    setWorkPerformedEditIndex((prev) => {
+      if (prev === null) return null
+      if (prev === index) return null
+      if (prev > index) return prev - 1
+      return prev
+    })
+  }
+
   const handleSubmit = async () => {
     if (!jobId) {
       toast({ title: "Validation Error", description: "Please select a job", variant: "destructive" })
@@ -202,10 +320,21 @@ export default function NewEntry() {
 
     setIsSubmitting(true)
     try {
+      // Primary structured work record: Work Performed (activities, quantities, materials). Notes are optional supplementary.
+      const workPerformedPayload = workPerformedList.map((wp) => ({
+        category: wp.category,
+        activityValue: wp.activityValue,
+        activityLabel: wp.activityLabel,
+        quantity: wp.quantity,
+        paintGallonsUsed: wp.paintGallonsUsed,
+        primerGallonsUsed: wp.primerGallonsUsed,
+        primerSource: wp.primerSource,
+      }))
       const payload = {
         jobId,
         jobName: projects?.find((j) => j.id === jobId)?.name ?? "",
         date,
+        workPerformed: workPerformedPayload,
         notes: notes || "",
         changeOrder: "",
         extraHours: extraWorkChecked ? (extraHours.trim() || "0") : "0",
@@ -262,6 +391,7 @@ export default function NewEntry() {
         <h1 className="text-lg font-bold">New Timesheet</h1>
       </div>
 
+      {/* Tabs 1–3: Crew & Time | Sundries | Work Performed. Single component state — switching tabs does not lose data. */}
       <div className="bg-white border-b border-gray-200 sticky top-[60px] z-10">
         <div className="max-w-2xl md:max-w-none xl:max-w-2xl mx-auto flex">
           <button
@@ -278,6 +408,14 @@ export default function NewEntry() {
           >
             <span className="flex items-center justify-center gap-2">
               <Package size={18} /> Sundries
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("work")}
+            className={`flex-1 py-3 px-4 text-center font-semibold text-sm ${activeTab === "work" ? "text-primary border-b-2 border-primary" : "text-gray-500"}`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <ClipboardList size={18} /> Work Performed
             </span>
           </button>
         </div>
@@ -306,16 +444,41 @@ export default function NewEntry() {
                         No jobs in list. Sync projects from Zoho to Supabase and ensure they have status &quot;Project Accepted&quot;.
                       </div>
                     ) : (
-                      <select
-                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none"
-                        value={jobId}
-                        onChange={(e) => setJobId(e.target.value)}
-                      >
-                        <option value="">Select a job</option>
-                        {projects.map((j) => (
-                          <option key={j.id} value={j.id}>{j.name}</option>
-                        ))}
-                      </select>
+                      <Popover open={jobSelectOpen} onOpenChange={setJobSelectOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white text-left text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary outline-none flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">
+                              {jobId ? (projects.find((j) => j.id === jobId)?.name ?? "Select a job") : "Select a job"}
+                            </span>
+                            <ChevronDown className="shrink-0 text-gray-500" size={18} />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search jobs..." className="h-11" />
+                            <CommandList>
+                              <CommandEmpty>No job found.</CommandEmpty>
+                              <CommandGroup>
+                                {projects.map((j) => (
+                                  <CommandItem
+                                    key={j.id}
+                                    value={j.name}
+                                    onSelect={() => {
+                                      setJobId(j.id)
+                                      setJobSelectOpen(false)
+                                    }}
+                                  >
+                                    {j.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     )}
                   </div>
                   <div>
@@ -470,11 +633,11 @@ export default function NewEntry() {
                             <Label className="text-xs text-gray-500">Lunch</Label>
                             <select
                               className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
-                              value={row.lunchDuration}
+                              value={row.lunchDuration || "0"}
                               onChange={(e) => updatePainter(index, "lunchDuration", e.target.value)}
                             >
                               {LUNCH_DURATION_OPTIONS.map((opt) => (
-                                <option key={opt.value || "none"} value={opt.value}>
+                                <option key={opt.value} value={opt.value}>
                                   {opt.label}
                                 </option>
                               ))}
@@ -534,11 +697,11 @@ export default function NewEntry() {
               </section>
 
               <section>
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Notes</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Additional notes (optional)</h2>
                 <TextAreaField
                   id="notes"
                   label="Notes"
-                  placeholder="Notes for this timesheet..."
+                  placeholder="Any additional notes for this timesheet..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
@@ -569,6 +732,233 @@ export default function NewEntry() {
                 </div>
               </section>
             </>
+          )}
+
+          {activeTab === "work" && (
+            <section>
+              <h2 className="text-lg font-bold text-gray-800 mb-1">Work Performed</h2>
+              <p className="text-sm text-gray-500 mb-4">Primary work record for this timesheet. Add activities and quantities below.</p>
+              <Label className="text-gray-700 font-semibold mb-2 block">Category</Label>
+              <div className="flex rounded-lg border border-gray-300 bg-gray-100 p-1 gap-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkPerformedCategory("interior")
+                    setWorkPerformedActivityValue("")
+                    setWorkPerformedQuantity("")
+                    setWorkPerformedPaintGallons("")
+                    setWorkPerformedPrimerGallons("")
+                    setWorkPerformedPrimerSource("stock")
+                    setWorkPerformedEditIndex(null)
+                    setWorkPerformedValidationError(null)
+                  }}
+                  className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${workPerformedCategory === "interior" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+                >
+                  Interior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkPerformedCategory("exterior")
+                    setWorkPerformedActivityValue("")
+                    setWorkPerformedQuantity("")
+                    setWorkPerformedPaintGallons("")
+                    setWorkPerformedPrimerGallons("")
+                    setWorkPerformedPrimerSource("stock")
+                    setWorkPerformedEditIndex(null)
+                    setWorkPerformedValidationError(null)
+                  }}
+                  className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${workPerformedCategory === "exterior" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+                >
+                  Exterior
+                </button>
+              </div>
+              {workPerformedCategory ? (
+                <div className="mt-4 space-y-4">
+                  {workPerformedEditIndex !== null && (
+                    <p className="text-sm text-primary font-medium">Editing saved activity. Update fields below and tap Update Activity.</p>
+                  )}
+                  <div>
+                    <Label className="text-gray-700 font-semibold mb-2 block">Activity</Label>
+                    <select
+                      value={workPerformedActivityValue}
+                      onChange={(e) => {
+                        setWorkPerformedActivityValue(e.target.value)
+                        setWorkPerformedQuantity("")
+                        setWorkPerformedPaintGallons("")
+                        setWorkPerformedPrimerGallons("")
+                        setWorkPerformedPrimerSource("stock")
+                        setWorkPerformedValidationError(null)
+                      }}
+                      className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
+                    >
+                      <option value="">Select activity</option>
+                      {WORK_PERFORMED_ACTIVITIES[workPerformedCategory].map((activity) => (
+                        <option key={activity.value} value={activity.value}>
+                          {activity.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-gray-700 font-semibold mb-1 block">Quantity of work (optional)</Label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.01}
+                        placeholder="0"
+                        value={workPerformedQuantity}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === "") {
+                            setWorkPerformedQuantity("")
+                            setWorkPerformedValidationError(null)
+                            return
+                          }
+                          const n = parseFloat(v)
+                          if (!Number.isNaN(n) && n < 0) return
+                          setWorkPerformedQuantity(v)
+                          setWorkPerformedValidationError(null)
+                        }}
+                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-semibold mb-1 block">Paint gallons used (optional)</Label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.01}
+                        placeholder="0"
+                        value={workPerformedPaintGallons}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === "") {
+                            setWorkPerformedPaintGallons("")
+                            setWorkPerformedValidationError(null)
+                            return
+                          }
+                          const n = parseFloat(v)
+                          if (!Number.isNaN(n) && n < 0) return
+                          setWorkPerformedPaintGallons(v)
+                          setWorkPerformedValidationError(null)
+                        }}
+                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-semibold mb-1 block">Primer gallons used (optional)</Label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.01}
+                        placeholder="0"
+                        value={workPerformedPrimerGallons}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === "") {
+                            setWorkPerformedPrimerGallons("")
+                            setWorkPerformedValidationError(null)
+                            return
+                          }
+                          const n = parseFloat(v)
+                          if (!Number.isNaN(n) && n < 0) return
+                          setWorkPerformedPrimerGallons(v)
+                          setWorkPerformedValidationError(null)
+                        }}
+                        className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
+                      />
+                      <div className="flex rounded-md border border-gray-300 bg-gray-100 p-0.5 mt-2 w-full max-w-[200px]">
+                        <button
+                          type="button"
+                          onClick={() => setWorkPerformedPrimerSource("stock")}
+                          className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "stock" ? "bg-primary text-white" : "text-gray-600"}`}
+                        >
+                          Stock
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWorkPerformedPrimerSource("retail")}
+                          className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "retail" ? "bg-primary text-white" : "text-gray-600"}`}
+                        >
+                          Retail
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {workPerformedValidationError && (
+                    <p className="text-sm text-red-600 font-medium" role="alert">
+                      {workPerformedValidationError}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={addWorkPerformedActivity}
+                    className="w-full py-3 px-4 rounded-lg border-2 border-primary bg-primary/10 text-primary font-semibold text-sm hover:bg-primary/20 transition-colors"
+                  >
+                    {workPerformedEditIndex !== null ? "Update Activity" : "Add Activity"}
+                  </button>
+                  {workPerformedList.length > 0 && (
+                    <div className="pt-2">
+                      <h3 className="text-base font-bold text-gray-800 mb-3">Saved activities ({workPerformedList.length})</h3>
+                      <div className="space-y-3">
+                        {workPerformedList.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm relative"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex flex-wrap items-baseline gap-2 min-w-0">
+                                <span className="text-xs font-semibold uppercase text-gray-500">
+                                  {item.category === "interior" ? "Interior" : "Exterior"}
+                                </span>
+                                <span className="text-gray-800 font-semibold">{item.activityLabel}</span>
+                              </div>
+                              <div className="flex shrink-0 gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingWorkPerformed(idx)}
+                                  className="p-1.5 rounded-md text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors"
+                                  aria-label="Edit activity"
+                                >
+                                  <Pencil size={18} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeWorkPerformedActivity(idx)}
+                                  className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  aria-label="Remove activity"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </div>
+                            <dl className="text-sm text-gray-600 space-y-0.5">
+                              {item.quantity > 0 && (
+                                <div><dt className="inline font-medium text-gray-500">Quantity: </dt><dd className="inline">{item.quantity}</dd></div>
+                              )}
+                              {item.paintGallonsUsed > 0 && (
+                                <div><dt className="inline font-medium text-gray-500">Paint: </dt><dd className="inline">{item.paintGallonsUsed} gal</dd></div>
+                              )}
+                              {item.primerGallonsUsed > 0 && (
+                                <div><dt className="inline font-medium text-gray-500">Primer: </dt><dd className="inline">{item.primerGallonsUsed} gal</dd></div>
+                              )}
+                              <div><dt className="inline font-medium text-gray-500">Primer source: </dt><dd className="inline capitalize">{item.primerSource}</dd></div>
+                            </dl>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-gray-500">Select a category to continue.</p>
+              )}
+            </section>
           )}
 
           {activeTab === "sundry" && (
