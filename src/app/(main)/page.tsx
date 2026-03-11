@@ -65,14 +65,18 @@ export default function Dashboard() {
   const handleLogout = async () => {
     setLoggingOut(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signOut();
-
-    if (!error) {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("[Logout] signOut failed:", error.message || error);
+      }
+    } catch (err) {
+      console.error("[Logout] unexpected error during signOut:", err);
+    } finally {
+      // In all cases, clear local user state and send the user to the login screen.
+      // This avoids leaving the app in a half-logged-out state if the network call fails.
       setUser(null);
-      // Full page redirect so middleware sees cleared session and doesn't redirect back to dashboard
       window.location.replace("/login");
-    } else {
-      setLoggingOut(false);
     }
   };
 
@@ -82,11 +86,11 @@ export default function Dashboard() {
     <Layout>
       <Header user={loading ? "..." : userName} onLogout={handleLogout} logoutLoading={loggingOut} />
 
-      <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-6 overflow-y-auto pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+      <main className="flex-1 w-full px-4 py-6 space-y-6 overflow-y-auto pb-24">
         {/* Main Action */}
-        <section>
-          <Link href="/entry/new">
-            <PrimaryButton className="h-16 text-lg shadow-lg flex items-center justify-center gap-2">
+        <section className="w-full">
+          <Link href="/entry/new" className="block w-full">
+            <PrimaryButton className="w-full h-16 text-lg shadow-lg flex items-center justify-center gap-2">
               <Plus size={24} strokeWidth={3} />
               New Timesheet
             </PrimaryButton>
@@ -94,8 +98,8 @@ export default function Dashboard() {
         </section>
 
         {/* Quick Glance */}
-        <section className="grid grid-cols-1 gap-4">
-          <div className="bg-secondary text-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center relative overflow-hidden">
+        <section className="w-full grid grid-cols-1 gap-4">
+          <div className="w-full bg-secondary text-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3 opacity-10">
               <Clock size={100} />
             </div>
@@ -109,20 +113,20 @@ export default function Dashboard() {
         </section>
 
         {/* Recent History */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
+        <section className="w-full">
+          <div className="flex items-center justify-between mb-3 w-full">
             <h3 className="font-heading text-lg font-bold text-gray-800">Recent Timesheets</h3>
             <Link href="/history" className="text-primary text-sm font-semibold flex items-center">
               View All <ChevronRight size={16} />
             </Link>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 w-full">
             {isLoadingEntries ? (
               // Skeleton loader - show for max 3 seconds
               <>
                 {[1, 2].map((i) => (
-                  <div key={i} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm animate-pulse">
+                  <div key={i} className="w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm animate-pulse">
                     <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
                     <div className="flex items-center gap-2 mt-2">
                       <div className="h-4 bg-gray-200 rounded w-20"></div>
@@ -132,7 +136,7 @@ export default function Dashboard() {
                 ))}
               </>
             ) : recentEntries.length === 0 ? (
-              <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm text-center text-gray-500">
+              <div className="w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm text-center text-gray-500">
                 No timesheets yet. Create your first timesheet!
               </div>
             ) : (
@@ -140,7 +144,7 @@ export default function Dashboard() {
                 <div 
                   key={entry.id} 
                   onClick={() => router.push(`/entry/${entry.id}`)}
-                  className="bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+                  className="w-full bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
                 >
                   <div>
                     <h4 className="font-bold text-gray-800 line-clamp-1">{entry.jobName}</h4>

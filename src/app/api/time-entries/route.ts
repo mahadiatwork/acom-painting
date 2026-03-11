@@ -18,15 +18,38 @@ const painterRowSchema = z.object({
   lunchEnd: z.string().optional().default(''),
 })
 
+/** Optional task-specific measurements (serialization-friendly). Aligns with JobProductionReference for future CRM. */
+const workPerformedMeasurementsSchema = z.object({
+  count: z.number().optional(),
+  linearFeet: z.number().optional(),
+  stairFloors: z.number().optional(),
+  doorCount: z.number().optional(),
+  windowCount: z.number().optional(),
+  handrailCount: z.number().optional(),
+}).strict()
+
+/** Work Performed: one entry per task. Paint/primer usage are per entry, not day-level. Normalized: groupCode, taskCode, measurements. */
 const workPerformedEntrySchema = z.object({
-  category: z.enum(['interior', 'exterior']),
-  activityValue: z.string(),
-  activityLabel: z.string(),
+  area: z.enum(['interior', 'exterior']),
+  groupCode: z.string(),
+  groupLabel: z.string(),
+  taskCode: z.string(),
+  taskLabel: z.string(),
   quantity: z.number(),
   paintGallonsUsed: z.number(),
   primerGallonsUsed: z.number(),
   primerSource: z.enum(['stock', 'retail']),
+  laborMinutes: z.number().optional().default(0),
+  measurements: workPerformedMeasurementsSchema.optional().default({}),
+  sortOrder: z.number().optional(),
 })
+
+/** Optional structured T&M extra work entry (separate from primary/customer work). */
+const tmExtraWorkSchema = z.object({
+  painters: z.array(painterRowSchema).optional().default([]),
+  notes: z.string().optional().default(''),
+  totalHours: z.number().optional().default(0),
+}).optional()
 
 const timesheetSchema = z.object({
   jobId: z.string(),
@@ -36,6 +59,7 @@ const timesheetSchema = z.object({
   changeOrder: z.string().nullable().optional().default(''),
   extraHours: z.union([z.string(), z.number()]).optional().default(0),
   extraWorkDescription: z.string().optional().default(''),
+  tmExtraWork: tmExtraWorkSchema,
   sundryItems: z.array(z.object({
     sundryItem: z.string(),
     quantity: z.number(),

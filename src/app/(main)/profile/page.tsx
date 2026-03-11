@@ -50,14 +50,18 @@ export default function Profile() {
 
   const handleLogout = async () => {
     const supabase = createClient();
-    const { error } = await supabase.auth.signOut();
-    
-    if (!error) {
-      // Clear local state
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("[Profile] signOut failed:", error.message || error);
+      }
+    } catch (err) {
+      console.error("[Profile] unexpected error during signOut:", err);
+    } finally {
+      // Clear local state and navigate away even if sign-out failed,
+      // so the user is not stuck on this screen.
       setUser(null);
-      // Redirect to login
       router.push("/login");
-      // Force a hard refresh to clear any cached data
       router.refresh();
     }
   };
