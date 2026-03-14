@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { db } from '@/lib/db'
-import { users, foremen } from '@/lib/schema'
+import { users } from '@/lib/schema'
 
 /**
  * POST /api/auth/provision
  * Zoho webhook: when a record is created in Portal_Users, create a Supabase Auth user
- * with a temporary password and optionally add them to users + foremen tables.
- * User is created with force_password_change: true so they are redirected to /update-password on first login.
+ * with a temporary password and add them to the users table only. Foremen are separate
+ * (Foreman module → POST /api/webhooks/foremen). User is created with force_password_change: true
+ * so they are redirected to /update-password on first login.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -80,21 +81,6 @@ export async function POST(request: NextRequest) {
       })
     } catch (dbErr: any) {
       console.error('[Provision] users table write failed:', dbErr?.message || dbErr)
-    }
-
-    // Upsert into foremen so they appear in Select Foreman list
-    try {
-      await db.insert(foremen).values({
-        zohoId: zohoIdStr,
-        email: emailTrimmed,
-        name: displayName,
-        phone: null,
-      }).onConflictDoUpdate({
-        target: foremen.zohoId,
-        set: { email: emailTrimmed, name: displayName, updatedAt: new Date().toISOString() },
-      })
-    } catch (dbErr: any) {
-      console.error('[Provision] foremen table write failed:', dbErr?.message || dbErr)
     }
 
     return NextResponse.json({
