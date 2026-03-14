@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { userProjects, users } from '@/lib/schema'
+import { foremen, userProjects } from '@/lib/schema'
 import { eq, and } from 'drizzle-orm'
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Security Check
-    const secret = request.headers.get('x-roofworx-secret')
-    if (secret !== process.env.ZOHO_WEBHOOK_SECRET) {
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader !== `Bearer ${process.env.ZOHO_WEBHOOK_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -18,22 +17,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields (portalUserId, dealId)' }, { status: 400 })
     }
 
-    // 2. Lookup User Email from Postgres
+    // Lookup foreman email from foremen table (Portal User ID = zoho_id)
     let email: string | null = null
-    
     try {
-      const [user] = await db.select().from(users).where(eq(users.zohoId, String(portalUserId))).limit(1)
-      email = user?.email || null
+      const [row] = await db.select({ email: foremen.email }).from(foremen).where(eq(foremen.zohoId, String(portalUserId))).limit(1)
+      email = row?.email ?? null
     } catch (dbError: any) {
-      console.error(`[Webhook] Postgres user lookup failed:`, dbError?.message || dbError)
+      console.error('[Webhook] Foreman lookup failed:', dbError?.message || dbError)
     }
-    
     if (!email) {
-        console.warn(`[Webhook] Unknown Portal User ID: ${portalUserId}. Run Cron Sync to populate users table.`)
-        return NextResponse.json({ 
-            error: 'User mapping not found',
-            hint: 'Trigger /api/cron/sync-projects to update users table'
-        }, { status: 404 })
+      console.warn(`[Webhook] Unknown Portal User ID: ${portalUserId}. Run Cron Sync to populate foremen table.`)
+      return NextResponse.json({
+        error: 'Foreman mapping not found',
+        hint: 'Trigger /api/cron/sync-projects to update foremen table',
+      }, { status: 404 })
     }
 
     // 3. Update Postgres user_projects table

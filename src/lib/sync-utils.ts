@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { timeEntries, timesheetPainters, users } from '@/lib/schema'
+import { foremen, timeEntries, timesheetPainters } from '@/lib/schema'
 import { zohoClient } from '@/lib/zoho'
 import { getUserTimezoneOffset } from '@/lib/timezone'
 import { eq, and } from 'drizzle-orm'
@@ -72,26 +72,30 @@ function buildSundryPayload(data: TimesheetData): Record<string, number> {
   return out
 }
 
-async function getForemanZohoIdFromEmail(email: string): Promise<string | null> {
+/** Resolve foreman's Zoho Portal User ID and email from foremen table (by foremen.id). */
+async function getForemanById(foremanId: string): Promise<{ zohoId: string; email: string } | null> {
   try {
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1)
-    return user?.zohoId || null
+    const [row] = await db.select({ zohoId: foremen.zohoId, email: foremen.email }).from(foremen).where(eq(foremen.id, foremanId)).limit(1)
+    if (!row?.zohoId || !row.email) return null
+    return { zohoId: row.zohoId, email: row.email }
   } catch (error) {
-    console.error('[Sync] Failed to lookup Foreman Portal User ID:', error)
+    console.error('[Sync] Failed to lookup foreman by id:', error)
     return null
   }
 }
 
 /**
  * Two-phase Zoho sync for a timesheet: create parent Time_Entry, then create each Time_Entries_X_Painters record.
+ * foremanId: the selected foreman's id (foremen.id from Postgres).
  */
-export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: string): Promise<void> {
+export async function syncTimesheetToZoho(data: TimesheetData, foremanId: string): Promise<void> {
   const timezone = getUserTimezoneOffset()
-  const foremanId = await getForemanZohoIdFromEmail(foremanEmail)
-  if (!foremanId) {
-    console.warn(`[Sync] Foreman Portal User ID not found for ${foremanEmail}, skipping Zoho sync`)
+  const foreman = await getForemanById(foremanId)
+  if (!foreman) {
+    console.warn(`[Sync] Foreman not found for id ${foremanId}, skipping Zoho sync`)
     return
   }
+  const zohoPortalUserId = foreman.zohoId
 
   let zohoTimeEntryId: string | null = data.zohoTimeEntryId || null
 
@@ -101,7 +105,7 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
       const sundryItems = buildSundryPayload(data)
       const parent = await zohoClient.createTimeEntryParent({
         projectId: data.jobId,
-        foremanId,
+        foremanId: zohoPortalUserId,
         date: data.date,
         notes: data.notes,
         sundryItems: Object.keys(sundryItems).length > 0 ? sundryItems : undefined,
@@ -170,11 +174,12 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanEmail: str
 
 /**
  * Retry unsynced timesheets for this foreman (piggyback recovery).
+ * foremanId: the selected foreman's id (foremen.id from Postgres).
  */
-export async function retryFailedSyncs(foremanEmail: string, foremanUserId: string): Promise<void> {
+export async function retryFailedSyncs(foremanId: string): Promise<void> {
   try {
     const unsynced = await db.select().from(timeEntries).where(and(
-      eq(timeEntries.userId, foremanUserId),
+      eq(timeEntries.foremanId, foremanId),
       eq(timeEntries.synced, false)
     ))
     if (unsynced.length === 0) return
@@ -195,7 +200,7 @@ export async function retryFailedSyncs(foremanEmail: string, foremanUserId: stri
       }))
       const timesheetData: TimesheetData = {
         id: te.id,
-        userId: te.userId,
+        userId: te.foremanId ?? te.userId ?? '',
         jobId: te.jobId,
         jobName: te.jobName,
         date: te.date,
@@ -222,7 +227,7 @@ export async function retryFailedSyncs(foremanEmail: string, foremanUserId: stri
         masks: te.masks ?? undefined,
         brickTapeRoll: te.brickTapeRoll ?? undefined,
       }
-      await syncTimesheetToZoho(timesheetData, foremanEmail)
+      await syncTimesheetToZoho(timesheetData, foremanId)
     }
     console.log(`[Retry] Completed retry for ${unsynced.length} timesheets`)
   } catch (error) {

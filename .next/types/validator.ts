@@ -137,6 +137,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/(main)/select-foreman/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/select-foreman">> = Specific
+  const handler = {} as typeof import("../../src/app/(main)/select-foreman/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/(main)/test/painters/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/test/painters">> = Specific
@@ -155,6 +164,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/auth/sync-portal-credentials/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/auth/sync-portal-credentials">> = Specific
+  const handler = {} as typeof import("../../src/app/api/auth/sync-portal-credentials/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/cron/sync-painters/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/cron/sync-painters">> = Specific
@@ -164,10 +182,28 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/cron/sync-portal-credentials/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/cron/sync-portal-credentials">> = Specific
+  const handler = {} as typeof import("../../src/app/api/cron/sync-portal-credentials/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/cron/sync-projects/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/cron/sync-projects">> = Specific
   const handler = {} as typeof import("../../src/app/api/cron/sync-projects/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/foremen/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/foremen">> = Specific
+  const handler = {} as typeof import("../../src/app/api/foremen/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
@@ -231,6 +267,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/assignments">> = Specific
   const handler = {} as typeof import("../../src/app/api/webhooks/assignments/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/webhooks/foremen/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/foremen">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/foremen/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

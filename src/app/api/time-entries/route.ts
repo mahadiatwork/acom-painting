@@ -49,6 +49,11 @@ const tmExtraWorkSchema = z.object({
   painters: z.array(painterRowSchema).optional().default([]),
   notes: z.string().optional().default(''),
   totalHours: z.number().optional().default(0),
+  sundryItems: z.array(z.object({
+    sundryItem: z.string(),
+    quantity: z.number(),
+  })).optional().default([]),
+  workPerformed: z.array(workPerformedEntrySchema).optional().default([]),
 }).optional()
 
 const timesheetSchema = z.object({
@@ -102,9 +107,12 @@ const SUNDRY_MAP: Record<string, string> = {
   'Brick Tape Roll': 'brickTapeRoll',
 }
 
+const SELECTED_FOREMAN_HEADER = 'x-selected-foreman-id'
+
 /**
  * GET /api/time-entries
- * Returns foreman's timesheets with nested painters.
+ * Returns the selected foreman's timesheets with nested painters.
+ * Requires X-Selected-Foreman-Id header (foremen.id from Postgres).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -112,6 +120,11 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const foremanId = request.headers.get(SELECTED_FOREMAN_HEADER)?.trim()
+    if (!foremanId) {
+      return NextResponse.json({ error: 'Missing X-Selected-Foreman-Id. Select a foreman first.' }, { status: 400 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -125,7 +138,7 @@ export async function GET(request: NextRequest) {
       .select()
       .from(timeEntries)
       .where(and(
-        eq(timeEntries.userId, user.id),
+        eq(timeEntries.foremanId, foremanId),
         sql`${timeEntries.date} >= ${cutoffDateStr}`
       ))
       .orderBy(desc(timeEntries.date))
@@ -182,7 +195,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/time-entries
- * Create timesheet (parent + painters) in Postgres, then background sync to Zoho.
+ * Create timesheet (parent + painters) in Postgres under the selected foreman, then background sync to Zoho.
+ * Requires X-Selected-Foreman-Id header (foremen.id from Postgres).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -190,6 +204,11 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const foremanId = request.headers.get(SELECTED_FOREMAN_HEADER)?.trim()
+    if (!foremanId) {
+      return NextResponse.json({ error: 'Missing X-Selected-Foreman-Id. Select a foreman first.' }, { status: 400 })
     }
 
     const payload = await request.json()
@@ -220,7 +239,7 @@ export async function POST(request: NextRequest) {
 
     const parentValues = {
       id: timesheetId,
-      userId: user.id,
+      foremanId,
       jobId: validated.jobId,
       jobName: validated.jobName,
       date,
@@ -298,7 +317,7 @@ export async function POST(request: NextRequest) {
 
     const timesheetData = {
       id: timesheetId,
-      userId: user.id,
+      userId: foremanId,
       jobId: validated.jobId,
       jobName: validated.jobName,
       date,
@@ -313,13 +332,11 @@ export async function POST(request: NextRequest) {
       ...sundryData,
     }
 
-    const userEmail = user.email
-    const userId = user.id
     waitUntil(
       (async () => {
         try {
-          await syncTimesheetToZoho(timesheetData, userEmail)
-          await retryFailedSyncs(userEmail, userId)
+          await syncTimesheetToZoho(timesheetData, foremanId)
+          await retryFailedSyncs(foremanId)
         } catch (e) {
           console.error('[API] Background sync error:', e)
         }

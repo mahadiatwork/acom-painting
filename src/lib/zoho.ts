@@ -90,18 +90,70 @@ class ZohoClient {
     }
   }
 
+  /** Fetch from Zoho Portal_Users (built-in). Use when foremen were sourced from Portal Users. */
   async getPortalUsers() {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
       const token = await this.getAccessToken();
       const response = await axios.get(`${this.apiDomain}/crm/v2/Portal_Users`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
-        params: { fields: 'id,Email,Full_Name' }
+        params: { fields: 'id,Email,Full_Name,Mobile' }
       });
       return response.data.data;
     } catch (error) {
       console.error('Zoho API Error (getPortalUsers):', error);
       return [];
+    }
+  }
+
+  /**
+   * Fetch all Foremen from the Zoho CRM Foreman module (custom module).
+   * Use this when foremen are stored in a dedicated Foreman module, separate from Portal Users.
+   * Env: ZOHO_FOREMAN_MODULE_NAME (default "Foremen") – API name of the Foreman module.
+   */
+  async getForemen(): Promise<{ id: string; Name?: string; Email?: string; Phone?: string; Mobile?: string }[]> {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
+      const token = await this.getAccessToken();
+      const moduleName = process.env.ZOHO_FOREMAN_MODULE_NAME || 'Foremen';
+      const response = await axios.get(`${this.apiDomain}/crm/v2/${moduleName}`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        params: { fields: 'id,Name,Email,Phone,Mobile' },
+      });
+      return response.data.data || [];
+    } catch (error) {
+      console.error('Zoho API Error (getForemen):', error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('[Zoho] getForemen response:', error.response?.status, error.response?.data);
+      }
+      return [];
+    }
+  }
+
+  /**
+   * Fetch CRM organization variables used for shared portal login.
+   * Requires Zoho CRM scope: ZohoCRM.settings.variables.READ
+   * Variables: portal_user_email (Email), portal_user_login (Single Line / password).
+   */
+  async getPortalLoginCredentials(): Promise<{ email: string; password: string } | null> {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return null;
+      const token = await this.getAccessToken();
+      const response = await axios.get<{ variables?: { api_name: string; value: string }[] }>(
+        `${this.apiDomain}/crm/v8/settings/variables`,
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      const variables = response.data?.variables ?? [];
+      const byName = Object.fromEntries(
+        variables.map((v: { api_name: string; value: string }) => [v.api_name, v.value ?? ''])
+      );
+      const email = (byName.portal_user_email ?? '').trim();
+      const password = (byName.portal_user_login ?? '').trim();
+      if (!email || !password) return null;
+      return { email, password };
+    } catch (error: any) {
+      console.error('Zoho API Error (getPortalLoginCredentials):', error?.message || error);
+      return null;
     }
   }
 
@@ -125,17 +177,20 @@ class ZohoClient {
     }
   }
 
+  /**
+   * Fetch junction records linking foremen (or portal users) to projects/deals.
+   * Env: ZOHO_JUNCTION_MODULE_NAME (e.g. Portal_Us_X_Job_Ticke, Foreman_X_Jobs).
+   * Env: ZOHO_JUNCTION_FOREMAN_LOOKUP_FIELD – lookup field for the "user" side (e.g. "Contractors" or "Foreman").
+   */
   async getUserJobConnections() {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
       const token = await this.getAccessToken();
-      // Fetch from the junction module
-      // NOTE: Update the module name below if it's different from Portal_Us_X_Job_Ticke
-      // Common alternatives: Contractor_X_Jobs, Portal_Users_X_Job_Tickets, etc.
       const moduleName = process.env.ZOHO_JUNCTION_MODULE_NAME || 'Portal_Us_X_Job_Ticke';
+      const foremanLookup = process.env.ZOHO_JUNCTION_FOREMAN_LOOKUP_FIELD || 'Contractors';
       const response = await axios.get(`${this.apiDomain}/crm/v2/${moduleName}`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
-        params: { fields: 'Contractors,Projects,Name' } 
+        params: { fields: `${foremanLookup},Projects,Name` }
       });
       return response.data.data;
     } catch (error: any) {

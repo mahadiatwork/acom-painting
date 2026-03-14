@@ -9,14 +9,33 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   email: text("email").unique(),
   zohoId: varchar("zoho_id"),
+  name: text("name"),
+  phone: text("phone"),
 }, (table) => ({
   emailIdx: index("users_email_idx").on(table.email),
   zohoIdIdx: index("users_zoho_id_idx").on(table.zohoId),
 }));
 
+/** Foremen synced from Zoho CRM Portal_Users. Used for "Select Foreman" and time entry ownership. */
+export const foremen = pgTable("foremen", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  zohoId: varchar("zoho_id").notNull().unique(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  createdAt: text("created_at").default(sql`now()`),
+  updatedAt: text("updated_at").default(sql`now()`),
+}, (table) => ({
+  zohoIdIdx: index("foremen_zoho_id_idx").on(table.zohoId),
+  emailIdx: index("foremen_email_idx").on(table.email),
+}));
+
 export const timeEntries = pgTable("time_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: text("user_id").notNull(),
+  /** Foreman who owns this timesheet (foremen.id). Prefer over userId. */
+  foremanId: text("foreman_id"),
+  /** @deprecated Use foremanId. Kept for backward compatibility. */
+  userId: text("user_id"),
   jobId: text("job_id").notNull(),
   jobName: text("job_name").notNull(),
   date: text("date").notNull(),
@@ -51,6 +70,7 @@ export const timeEntries = pgTable("time_entries", {
   extraHours: text("extra_hours").notNull().default("0"),
   extraWorkDescription: text("extra_work_description").default(""),
 }, (table) => ({
+  foremanIdIdx: index("time_entries_foreman_id_idx").on(table.foremanId),
   userIdIdx: index("user_id_idx").on(table.userId),
   dateIdx: index("date_idx").on(table.date),
   jobIdIdx: index("job_id_idx").on(table.jobId),
@@ -123,6 +143,7 @@ export const userProjects = pgTable("user_projects", {
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 export type User = typeof users.$inferSelect;
+export type Foreman = typeof foremen.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type UserProject = typeof userProjects.$inferSelect;
 export type Painter = typeof painters.$inferSelect;

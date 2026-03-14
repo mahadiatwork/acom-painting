@@ -37,7 +37,7 @@ A Next.js field application for ACOM Painting crews to log time entries and sund
 | Framework      | Next.js 15 (App Router)                              |
 | UI             | Tailwind CSS 4, Shadcn UI, Radix Primitives          |
 | Database       | PostgreSQL (Supabase) via Drizzle ORM                |
-| Auth           | Supabase Auth (provisioned from Zoho CRM)            |
+| Auth           | Supabase Auth (single shared login from Zoho CRM org variables) |
 | Data Fetching  | React Query (TanStack Query v5)                      |
 | Validation     | Zod                                                  |
 | HTTP Client    | Axios (Zoho API), Fetch (internal APIs)              |
@@ -66,9 +66,11 @@ One-way sync with two mechanisms:
 4. On each new submission, a **piggyback recovery** mechanism retries any previously failed Zoho syncs for that user.
 5. Entries have a `synced` flag to track Zoho sync status.
 
-### Users (Zoho -> Supabase)
+### Users & Authentication (Zoho -> Supabase)
 
-Users are provisioned from Zoho CRM via `POST /api/auth/provision`. This creates a Supabase Auth user and writes the `zoho_id` mapping to the Postgres `users` table.
+- **Shared portal login:** One Supabase Auth user is used for all foremen. Its email and password come from Zoho CRM **organization variables**: `portal_user_email` (Email type) and `portal_user_login` (Single Line, used as password). After login, users choose which foreman they are logging time for via **Select Foreman**; the foremen list comes from the Postgres **foremen** table; foremen are pushed only when a Zoho workflow runs on Foreman create (POST /api/webhooks/foremen). There is no cron sync for foremen.
+- **Syncing credentials:** Call `GET /api/auth/sync-portal-credentials` (or the cron `GET /api/cron/sync-portal-credentials`) with `Authorization: Bearer ZOHO_WEBHOOK_SECRET` to create or update the single Supabase Auth user from the current Zoho variable values. Schedule this (e.g. daily) or run it after changing the variables in Zoho.
+- **Provision webhook:** `POST /api/auth/provision` is a no-op (returns success) so existing Zoho workflows do not break; no per-foreman Supabase Auth users are created.
 
 ---
 
@@ -80,8 +82,9 @@ Managed with Drizzle ORM. Schema defined in `src/lib/schema.ts`.
 
 | Table                | Purpose                                                          |
 | -------------------- | ---------------------------------------------------------------- |
-| `users`              | Foreman accounts with `zoho_id` (Portal User) mapping            |
-| `time_entries`       | Timesheet parent (job, date, foreman, notes, sundries, `synced`) |
+| `foremen`            | Foremen synced from Zoho Portal_Users (name, email, phone, `zoho_id`) |
+| `users`              | App users (added separately; not used for foreman list)          |
+| `time_entries`       | Timesheet parent (job, date, `foreman_id`, notes, sundries, `synced`) |
 | `timesheet_painters` | Junction: painter + start/end/lunch/total hours per timesheet    |
 | `painters`           | Crew members synced from Zoho Painters module                    |
 | `projects`           | Projects synced from Zoho (id, name, status, date, address)       |
@@ -97,10 +100,11 @@ Each time entry stores quantities for: Masking Paper Roll, Plastic Roll, Putty/S
 
 ### Authentication & Users
 
-| Route                        | Method | Description                                      |
-| ---------------------------- | ------ | ------------------------------------------------ |
-| `/api/auth/provision`        | POST   | Zoho webhook to provision users in Supabase Auth |
-| `/api/user/zoho-id`          | GET    | Get logged-in user's Zoho ID from `users` table  |
+| Route                              | Method | Description                                                                 |
+| ---------------------------------- | ------ | --------------------------------------------------------------------------- |
+| `/api/auth/provision`              | POST   | Zoho webhook (no-op); shared login uses org variables, not per-user provision |
+| `/api/auth/sync-portal-credentials`| GET    | Sync shared Supabase Auth user from Zoho variables (portal_user_email, portal_user_login); secured by ZOHO_WEBHOOK_SECRET |
+| `/api/user/zoho-id`                | GET    | Get logged-in user's Zoho ID from `users` table                             |
 
 ### Time Entries (Timesheets)
 
@@ -121,15 +125,17 @@ Each time entry stores quantities for: Masking Paper Roll, Plastic Roll, Putty/S
 | -------------------------------- | ------ | -------------------------------------------- |
 | `/api/sync/projects/trigger`     | POST   | Real-time project sync (Zoho workflow)       |
 | `/api/sync/projects/daily`       | POST   | Daily safety net project sync                |
-| `/api/cron/sync-projects`        | GET    | Full cron: projects + users + assignments    |
+| `/api/cron/sync-projects`        | GET    | Full cron: projects + assignments (foremen are webhook-only, not synced here) |
+| `/api/cron/sync-portal-credentials` | GET | Cron: sync shared portal login from Zoho org variables (ZOHO_WEBHOOK_SECRET) |
 
 ### Webhooks (called by Zoho)
 
 | Route                            | Method | Description                                  |
 | -------------------------------- | ------ | -------------------------------------------- |
 | `/api/webhooks/projects`         | POST   | Zoho project update notifications            |
-| `/api/webhooks/users`            | POST   | Zoho user update notifications               |
-| `/api/webhooks/assignments`      | POST   | Zoho user-project assignment changes         |
+| `/api/webhooks/foremen`          | POST   | Zoho Portal User (foreman) create/update → sync to `foremen` table |
+| `/api/webhooks/users`            | POST   | (Legacy) Zoho user update notifications     |
+| `/api/webhooks/assignments`      | POST   | Zoho foreman-project assignment changes     |
 | `/api/webhooks/painters`         | POST   | Zoho Painter create/update                   |
 
 ### Painters (Foreman model)
@@ -186,6 +192,11 @@ Each time entry stores quantities for: Masking Paper Roll, Plastic Roll, Putty/S
 | ------------------------------- | -------------------------------------------------- |
 | `DATABASE_URL_DIRECT`           | Direct Supabase connection (port 5432, for Drizzle migrations) |
 | `ZOHO_JUNCTION_MODULE_NAME`     | Zoho junction module name (default: `Portal_Us_X_Job_Ticke`) |
+| `ZOHO_JUNCTION_FOREMAN_LOOKUP_FIELD` | Lookup field in junction for foreman side: `Contractors` or `Foreman` (default: `Contractors`) |
+| `ZOHO_FOREMAN_MODULE_NAME`      | Zoho Foreman module API name for foremen list (default: `Foremen`) |
+| `ZOHO_PAINTERS_MODULE_NAME`     | Zoho Painters module API name (default: `Painters`) |
+
+**Zoho CRM Variables (shared portal login):** Ensure org variables `portal_user_email` and `portal_user_login` exist in Zoho CRM. The Zoho OAuth token must have scope **ZohoCRM.settings.variables.READ** to read them.
 
 > **Important:** On Vercel, `DATABASE_URL` **must** use the Supabase Connection Pooling URL (port 6543), not the direct connection (port 5432). See [VERCEL_DATABASE_FIX.md](VERCEL_DATABASE_FIX.md).
 
@@ -225,6 +236,7 @@ pnpm db:studio
 ```
 
 SQL migration files are available in the project root for manual execution in Supabase SQL Editor:
+- `CREATE_FOREMEN_TABLE.sql` - Create `foremen` table and add `foreman_id` to `time_entries`
 - `ADD_SYNCED_COLUMN_AND_SUNDRY_ITEMS.sql` - Add synced flag + sundry item columns
 - `CREATE_PROJECTS_TABLE_MINIMAL.sql` - Create the projects table
 
@@ -235,6 +247,7 @@ SQL migration files are available in the project root for manual execution in Su
 ### Setup & Configuration
 
 - [Zoho Auth Setup](ZOHO_AUTH_SETUP.md) - User provisioning from Zoho CRM to Supabase
+- [Foreman Sync from CRM](FOREMAN_SYNC_FROM_CRM.md) - Sync foremen (name, email, phone) from Zoho Portal Users; no individual passwords; includes Deluge code
 - [Zoho Sync Deluge Scripts](ZOHO_SYNC_DELUGE_SCRIPTS.md) - Trigger & daily sync Deluge code
 - [Zoho Projects Sync](ZOHO_PROJECTS_SYNC.md) - Real-time sync webhooks configuration
 - [Database Setup](DATABASE_SETUP.md) - Database configuration guide

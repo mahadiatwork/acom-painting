@@ -40,7 +40,7 @@ export default function Login() {
         });
         router.push("/update-password");
       } else {
-        router.push("/");
+        router.push("/select-foreman");
       }
     } catch (error: any) {
       toast({
@@ -73,8 +73,8 @@ export default function Login() {
 
         <div className="flex-1 p-8 pt-10 bg-white">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-            <p className="text-gray-500">Foremen: sign in with your company email to log crew timesheets.</p>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Sign in</h2>
+            <p className="text-gray-500">Use the shared login. After signing in you will select which foreman you are logging time for.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">

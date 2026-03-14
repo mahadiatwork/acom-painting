@@ -80,11 +80,9 @@ export default function Dashboard() {
     }
   };
 
-  const userName = user?.user_metadata?.name || user?.email || "User";
-
   return (
     <Layout>
-      <Header user={loading ? "..." : userName} onLogout={handleLogout} logoutLoading={loggingOut} />
+      <Header onLogout={handleLogout} logoutLoading={loggingOut} />
 
       <main className="flex-1 w-full px-4 py-6 space-y-6 overflow-y-auto pb-24">
         {/* Main Action */}

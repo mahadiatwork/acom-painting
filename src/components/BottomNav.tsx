@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function BottomNav() {
   const pathname = usePathname();
+  if (pathname === "/select-foreman") return null;
 
   const navItems = [
     { label: "Home", icon: Home, href: "/" },

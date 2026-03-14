@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { SelectedForemanProvider } from '@/contexts/SelectedForemanContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient instance once per app lifecycle
@@ -26,10 +27,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        {children}
-      </TooltipProvider>
+      <SelectedForemanProvider>
+        <TooltipProvider>
+          <Toaster />
+          {children}
+        </TooltipProvider>
+      </SelectedForemanProvider>
     </QueryClientProvider>
   )
 }

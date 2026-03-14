@@ -45,9 +45,9 @@ export function Header({ title, user, onLogout, logoutLoading }: { title?: strin
         </div>
       )}
 
-      {user && (
+      {(user || onLogout) && (
         <div className="flex items-center gap-3">
-          {!logoutLoading && <span className="text-sm font-medium text-gray-300">{user}</span>}
+          {user && !logoutLoading && <span className="text-sm font-medium text-gray-300">{user}</span>}
           {onLogout && (
             <button
               type="button"

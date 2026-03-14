@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
+import { useSelectedForeman } from '@/contexts/SelectedForemanContext'
 
 export interface TimeEntryPainter {
   id: string
@@ -50,17 +51,20 @@ interface UseTimeEntriesOptions {
 
 export function useTimeEntries(options?: UseTimeEntriesOptions) {
   const { days = 30 } = options || {}
+  const { foreman } = useSelectedForeman()
 
   return useQuery<TimeEntry[]>({
-    queryKey: ['time-entries', days],
+    queryKey: ['time-entries', days, foreman?.id ?? null],
     // Prevent query cancellation on unmount - let it complete
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     queryFn: async ({ signal }) => {
+      if (!foreman?.id) return []
       try {
         const response = await axios.get('/api/time-entries', {
           params: { days },
           timeout: 10000, // 10 second timeout - API can take 2-3 seconds
           signal, // Pass React Query's cancellation signal to axios
+          headers: { 'X-Selected-Foreman-Id': foreman.id },
         })
 
         // DEBUG LOGGING

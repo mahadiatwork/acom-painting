@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { zohoClient } from '@/lib/zoho'
 import { db } from '@/lib/db'
-import { projects, userProjects, users } from '@/lib/schema'
+import { foremen, projects, userProjects } from '@/lib/schema'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { eq, inArray } from 'drizzle-orm'
 
@@ -83,78 +83,40 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // STEP 2: Sync User Access (Optimized via Junction Module)
+    // STEP 2: Project assignments (junction) – foremen are not synced here
     // ---------------------------------------------------------
-    
-    // A. Build User Map (ID -> Email) and sync to Postgres
-    const portalUsers = await zohoClient.getPortalUsers()
-    const userMap = new Map<string, string>() // ID -> Email
-    
-    if (portalUsers && Array.isArray(portalUsers)) {
-      portalUsers.forEach((u: any) => {
-        if (u.Email && u.id) userMap.set(u.id, u.Email)
-      })
+    // Foremen are pushed to Supabase only by the Zoho workflow (POST /api/webhooks/foremen) when a foreman is created in the Foreman module. We build the foreman-id -> email map from the existing foremen table for the junction.
+    const foremenRows = await db.select({ zohoId: foremen.zohoId, email: foremen.email }).from(foremen)
+    const userMap = new Map<string, string>() // Zoho Foreman ID -> Email (for junction below)
+    for (const row of foremenRows) {
+      if (row.zohoId && row.email) userMap.set(row.zohoId, row.email)
     }
+    console.log(`[Cron] Foremen in DB (webhook-pushed only): ${userMap.size}`)
 
-    // Sync users to Postgres (UPSERT)
-    try {
-      if (userMap.size > 0) {
-        for (const [userId, email] of userMap.entries()) {
-          await db.insert(users).values({
-            email: email,
-            zohoId: userId,
-            username: email,
-            password: '', // Password managed by Supabase Auth
-          }).onConflictDoUpdate({
-            target: users.email,
-            set: {
-              zohoId: userId,
-              username: email,
-            }
-          })
-        }
-        console.log(`[Cron] Synced ${userMap.size} users to Postgres`)
-      }
-    } catch (dbError: any) {
-      console.error('[Cron] Postgres users sync failed:', dbError?.message || dbError)
-      // Continue even if Postgres fails
-    }
-
-    // B. Fetch Junction Records (Portal_Us_X_Job_Ticke)
+    // B. Fetch Junction Records (Foreman/Contractor <-> Projects). Field name from ZOHO_JUNCTION_FOREMAN_LOOKUP_FIELD (e.g. Contractors or Foreman).
     const connections = await zohoClient.getUserJobConnections()
-    
-    // DEBUG: Log raw connection data from Zoho
-    console.log(`[Cron] Raw connections from Zoho:`, JSON.stringify(connections, null, 2))
-    console.log(`[Cron] Number of connections fetched:`, connections?.length || 0)
-    
-    // C. Group Connections by User Email
+    const foremanLookupField = process.env.ZOHO_JUNCTION_FOREMAN_LOOKUP_FIELD || 'Contractors'
+
+    console.log(`[Cron] Junction foreman lookup field: ${foremanLookupField}, connections: ${connections?.length ?? 0}`)
+
+    // C. Group Connections by Foreman Email
     const userProjectsMap = new Map<string, Set<string>>() // Email -> Set<DealID>
     let connectionCount = 0
 
     if (connections && Array.isArray(connections)) {
       for (const conn of connections) {
-        // DEBUG: Log each connection structure
-        console.log(`[Cron] Processing connection:`, JSON.stringify(conn, null, 2))
-        
-        // Lookup field names from the Junction Module
-        const userId = conn.Contractors?.id
+        const userId = conn[foremanLookupField]?.id
         const dealId = conn.Projects?.id
-        
-        console.log(`[Cron] Extracted - userId: ${userId}, dealId: ${dealId}`)
         
         if (userId && dealId) {
           const email = userMap.get(userId)
-          console.log(`[Cron] User ID ${userId} maps to email: ${email}`)
           if (email) {
             if (!userProjectsMap.has(email)) userProjectsMap.set(email, new Set())
             userProjectsMap.get(email)!.add(dealId)
             connectionCount++
-            console.log(`[Cron] Added connection: ${email} -> ${dealId}`)
           } else {
-            console.warn(`[Cron] No email found for user ID: ${userId}`)
+            console.warn(`[Cron] No email found for foreman ID: ${userId}`)
           }
-        } else {
-          console.warn(`[Cron] Missing userId or dealId in connection:`, conn)
         }
       }
     }
@@ -236,7 +198,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       success: true, 
       projectsCount: projectsData.length,
-      usersSynced: userMap.size,
+      foremenCount: userMap.size,
       connectionsProcessed: connectionCount,
       postgresConnectionsSynced: postgresConnectionsSynced,
       paintersSynced,

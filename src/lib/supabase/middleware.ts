@@ -68,9 +68,9 @@ export async function updateSession(request: NextRequest) {
     // Case B: Normal User
     else {
       if (isAuthPath || isUpdatePasswordPath) {
-        // Redirect to dashboard if trying to access login or update password pages
+        // Redirect to select-foreman after login so user picks which foreman they're logging for
         const url = request.nextUrl.clone()
-        url.pathname = '/'
+        url.pathname = '/select-foreman'
         return NextResponse.redirect(url)
       }
     }
