@@ -7,7 +7,7 @@ import { Loader2, User } from "lucide-react"
 import { useSelectedForeman, type Foreman } from "@/contexts/SelectedForemanContext"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
-import type { User } from "@supabase/supabase-js"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 export default function SelectForemanPage() {
   const router = useRouter()
@@ -16,7 +16,7 @@ export default function SelectForemanPage() {
   const [foremen, setForemen] = useState<Foreman[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [loggingOut, setLoggingOut] = useState(false)
 
