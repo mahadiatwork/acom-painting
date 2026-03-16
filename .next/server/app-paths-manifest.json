@@ -1,4 +1,7 @@
 {
+  "/api/painters/route": "app/api/painters/route.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(main)/select-foreman/page": "app/(main)/select-foreman/page.js",
   "/(main)/page": "app/(main)/page.js",
-  "/(main)/select-foreman/page": "app/(main)/select-foreman/page.js"
+  "/(main)/entry/new/page": "app/(main)/entry/new/page.js"
 }

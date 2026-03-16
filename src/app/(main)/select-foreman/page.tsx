@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Layout, Header } from "@/components/Layout"
-import { Loader2, User } from "lucide-react"
+import { ForemanCombobox } from "@/components/ForemanCombobox"
+import { Loader2 } from "lucide-react"
 import { useSelectedForeman, type Foreman } from "@/contexts/SelectedForemanContext"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
@@ -107,25 +108,15 @@ export default function SelectForemanPage() {
         )}
 
         {!loading && foremen.length > 0 && (
-          <ul className="space-y-2">
-            {foremen.map((f) => (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(f)}
-                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white text-left hover:bg-primary/5 hover:border-primary/30 transition-colors"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <User size={20} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-800 truncate">{f.name}</p>
-                    <p className="text-sm text-gray-500 truncate">{f.email}</p>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="max-w-md">
+            <ForemanCombobox
+              foremen={foremen}
+              value={null}
+              onSelect={handleSelect}
+              placeholder="Search and select foreman..."
+              standalone
+            />
+          </div>
         )}
       </main>
     </Layout>

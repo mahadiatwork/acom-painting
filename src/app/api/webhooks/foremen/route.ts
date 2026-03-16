@@ -7,7 +7,7 @@ import { foremen } from '@/lib/schema'
  * Zoho webhook: when a Portal User (foreman) is created or updated in CRM,
  * sync name, email, phone to the foremen table. No users table or Supabase Auth.
  * Auth: Authorization: Bearer ZOHO_WEBHOOK_SECRET
- * Body: { id, Email, name?, phone? } (id = Zoho Portal_Users record ID = zoho_id)
+ * Body: { id, Email?, name?, phone? } (id required; Email optional – foreman can be created without email)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -19,13 +19,13 @@ export async function POST(request: NextRequest) {
     const payload = await request.json()
     const { id, Email, name: payloadName, phone } = payload
 
-    if (!id || !Email) {
-      return NextResponse.json({ error: 'Missing required fields (id, Email)' }, { status: 400 })
+    if (!id) {
+      return NextResponse.json({ error: 'Missing required field: id' }, { status: 400 })
     }
 
     const zohoId = String(id)
-    const email = String(Email).trim()
-    const name = (payloadName ?? email).trim()
+    const email = (Email != null && String(Email).trim() !== '') ? String(Email).trim() : ''
+    const name = (payloadName ?? (email || `Foreman ${zohoId}`)).trim()
     const phoneVal = (phone ?? '').trim() || null
 
     try {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         }
       })
-      console.log(`[Webhook] Updated foremen table: ${email} (Zoho ID: ${zohoId})`)
+      console.log(`[Webhook] Updated foremen table: ${name} (Zoho ID: ${zohoId}${email ? `, ${email}` : ', no email'})`)
     } catch (dbError: any) {
       console.error('[Webhook] Foremen upsert failed:', dbError?.message || dbError)
       return NextResponse.json({ error: 'Database update failed' }, { status: 500 })

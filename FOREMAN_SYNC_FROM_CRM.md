@@ -74,7 +74,7 @@ ALTER TABLE time_entries ALTER COLUMN user_id DROP NOT NULL;
 - **POST /api/webhooks/foremen**  
   Called by Zoho when a Portal User (foreman) is created or updated.  
   - **Auth:** `Authorization: Bearer <ZOHO_WEBHOOK_SECRET>`  
-  - **Body:** `{ "id": "<foreman_record_id>", "Email": "<email>", "name": "<full name>", "phone": "<phone>" }`  
+  - **Body:** `{ "id": "<foreman_record_id>", "Email": "<email or empty>", "name": "<full name>", "phone": "<phone>" }` – **id** is required; **Email** is optional (foremen can be created without email).  
   - **Behavior:** Upserts into the **foremen** table by `zoho_id`. No `users` table or Supabase Auth.
 
 - **GET /api/foremen**  
@@ -86,8 +86,8 @@ ALTER TABLE time_entries ALTER COLUMN user_id DROP NOT NULL;
 
 1. **Foreman module**  
    Ensure it has (or equivalent):
-   - **Name**
-   - **Email**
+   - **Name** (or **First Name** / **Last Name**)
+   - **Email** (optional – foremen can be created without email)
    - **Phone** (or **Mobile**)
 
 2. **Organization variable**  
@@ -118,24 +118,47 @@ Foremen are **not** synced by the cron; they are only pushed via the webhook. Th
 
 Use this when the source of foremen is the **Foreman** module (not Portal_Users). It pushes **name, email, phone** to your app.
 
+**Critical:** The endpoint path is **`/api/webhooks/foremen`** (plural **foremen**), not `foreman`. Use body key **`Email`** (capital E) when sending email; it can be empty or omitted – foremen can be created without email.
+
 ```deluge
 void automation.sync_foreman_to_supabase(Int recordId)
 {
-    // 1. Get Foreman record from the Foreman module (API name often "Foremen" or "Foreman")
-    record = zoho.crm.getRecordById("Foremen", recordId);  // or "Foreman" – match your module API name
-    email = ifnull(record.get("Email"), "").trim();
-    if (email == "")
+    // 1. Get Foreman record. Module API name is often "Foremans", "Foremen", or "Foreman" – check Zoho Setup > API names.
+    record = zoho.crm.getRecordById("Foremans", recordId);  // Use "Foremans" or "Foremen" or "Foreman" to match your module
+    if (record == null)
     {
-        return; // No email - skip
+        record = zoho.crm.getRecordById("Foremen", recordId);
+    }
+    if (record == null)
+    {
+        record = zoho.crm.getRecordById("Foreman", recordId);
+    }
+    if (record == null)
+    {
+        info "Foreman record not found for id: " + recordId;
+        return;
     }
 
+    // Email is optional – foreman can be created without email
+    email = ifnull(record.get("Email"), "").trim();
+
+    // Name: API name is "Name" (Foreman Name). Fallback to First_Name + Last_Name or email or "Foreman {id}"
     name = ifnull(record.get("Name"), "").trim();
     if (name == "")
     {
-        name = email; // Fallback to email for display
+        first = ifnull(record.get("First_Name"), "").trim();
+        last  = ifnull(record.get("Last_Name"), "").trim();
+        if (first != "" || last != "")
+        {
+            name = (first + " " + last).trim();
+        }
+        if (name == "")
+        {
+            name = email != "" ? email : "Foreman " + recordId.toString(); // Fallback to email or "Foreman {id}"
+        }
     }
 
-    // Phone: try Phone first, then Mobile
+    // Phone: try Phone first, then Mobile (API names from Foremans module)
     phone = "";
     if (record.get("Phone") != null && record.get("Phone") != "")
     {
@@ -146,14 +169,20 @@ void automation.sync_foreman_to_supabase(Int recordId)
         phone = record.get("Mobile").toString().trim();
     }
 
-    // 2. Call webhook to upsert foreman in Supabase foremen table (no Auth user, no password)
+    // 2. Call webhook – URL must be /api/webhooks/foremen (plural). Body must use "Email" (capital E).
     url = "https://acom-painting.vercel.app/api/webhooks/foremen";
     secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+    if (secret == null || secret == "")
+    {
+        info "ZOHO_WEBHOOK_SECRET is not set. Set it in Zoho CRM Setup > Organization Variables.";
+        return;
+    }
 
-    // Build JSON body (escape quotes in name/phone for valid JSON)
-    nameEsc  = name.replaceAll("\"", "\\\\\"");
-    phoneEsc = phone.replaceAll("\"", "\\\\\"");
-    jsonBody = "{\"id\":\"" + recordId.toString() + "\",\"Email\":\"" + email.replaceAll("\"", "\\\\\"") + "\",\"name\":\"" + nameEsc + "\",\"phone\":\"" + phoneEsc + "\"}";
+    // Build JSON body: id, Email (capital E), name, phone. Escape quotes for valid JSON.
+    emailEsc = email.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+    nameEsc  = name.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+    phoneEsc = phone.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+    jsonBody = "{\"id\":\"" + recordId.toString() + "\",\"Email\":\"" + emailEsc + "\",\"name\":\"" + nameEsc + "\",\"phone\":\"" + phoneEsc + "\"}";
 
     headers = Map();
     headers.put("Authorization", "Bearer " + secret);
@@ -167,14 +196,17 @@ void automation.sync_foreman_to_supabase(Int recordId)
         headers : headers
     ];
 
-    info response;
+    info "Webhook response: " + response;
 }
 ```
 
 **Notes:**
 
+- **URL:** Must be `.../api/webhooks/foremen` (plural **foremen**). Using `foreman` returns 404 and no response.
+- **Body key:** The API requires **`Email`** (capital E). Using `email` returns 400 "Missing required fields (id, Email)".
 - Replace `https://acom-painting.vercel.app` with your app URL if different.
-- The webhook expects **Bearer** auth: `Authorization: Bearer <ZOHO_WEBHOOK_SECRET>`.
+- The webhook expects **Bearer** auth: `Authorization: Bearer <ZOHO_WEBHOOK_SECRET>`. Set `ZOHO_WEBHOOK_SECRET` in Zoho CRM **Setup > Organization Variables**.
+- Module API name: If your module is "Foremans" (as in Zoho API names), use `getRecordById("Foremans", recordId)`. The script above tries "Foremans", "Foremen", then "Foreman".
 - No random password is generated and no welcome email is sent. Foremen use the **shared portal login** (org variables) and then select their name on the app.
 
 ---
@@ -203,4 +235,17 @@ sendmail
 - **App:** Foremen list comes from `GET /api/foremen` (from **foremen** table). Everyone signs in with the **shared** credentials, then chooses a foreman by **name** (and email/phone if you show them).
 
 No individual foreman passwords are created or sent.
+
+---
+
+## Troubleshooting: "No response from API foreman"
+
+| Problem | Fix |
+|--------|-----|
+| **Wrong URL** – script uses `/api/webhooks/foreman` (singular) | Use **`/api/webhooks/foremen`** (plural). The app route is `foremen`. |
+| **400 "Missing required fields (id, Email)"** | Use **`/api/webhooks/foremen`** (plural) and **`"Email"`** (capital E). Email can be empty: send `"Email":""` or omit it – only **id** is required. |
+| **404 or no response** | Confirm the full URL is `https://<your-app-domain>/api/webhooks/foremen`. |
+| **401 Unauthorized** | Set `ZOHO_WEBHOOK_SECRET` in Zoho CRM **Setup > Organization Variables** and use it in the `Authorization: Bearer <secret>` header. |
+| **Record not found** | Your module API name may be **"Foremans"** (plural). Use `getRecordById("Foremans", recordId)` or try "Foremen"/"Foreman". |
+| **Empty name** | If `Name` is empty, the script now falls back to `First_Name` + `Last_Name` (your Foremans module has these fields). |
 

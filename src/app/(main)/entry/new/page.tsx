@@ -125,6 +125,17 @@ function minutesToTime(totalMinutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
+/** Snap HH:MM to nearest 15 minutes (00, 15, 30, 45). */
+function snapTimeTo15Minutes(time: string): string {
+  if (!time || !time.includes(":")) return time
+  const [h, m] = time.split(":").map(Number)
+  const totalM = (h ?? 0) * 60 + (m ?? 0)
+  const snappedM = Math.round(totalM / 15) * 15
+  const hours = Math.floor(snappedM / 60) % 24
+  const mins = snappedM % 60
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`
+}
+
 /** Derive lunch start/end from shift and duration (lunch centered in shift). */
 function durationToLunchStartEnd(start: string, end: string, durationMinutes: number): { lunchStart: string; lunchEnd: string } {
   if (!durationMinutes || !start || !end) return { lunchStart: "", lunchEnd: "" }
@@ -364,45 +375,44 @@ export default function NewEntry() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs text-gray-500">Work hours</Label>
-                        <select
+                        <Label className="text-xs text-gray-500">From</Label>
+                        <input
+                          type="time"
+                          step={900}
                           className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
-                          value={row.workHours}
-                          onChange={(e) => updateRow(index, "workHours", e.target.value)}
-                        >
-                          <option value="">Select hours</option>
-                          {LABOR_MAN_HOUR_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label} hrs
-                            </option>
-                          ))}
-                        </select>
+                          value={row.startTime || DEFAULT_START}
+                          onChange={(e) => updateRow(index, "startTime", snapTimeTo15Minutes(e.target.value))}
+                        />
                       </div>
                       <div>
-                        <Label className="text-xs text-gray-500">Lunch hours</Label>
-                        <select
+                        <Label className="text-xs text-gray-500">To</Label>
+                        <input
+                          type="time"
+                          step={900}
                           className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
-                          value={row.lunchDuration || "0"}
-                          onChange={(e) => updateRow(index, "lunchDuration", e.target.value)}
-                        >
-                          {LUNCH_DURATION_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label} hrs
-                            </option>
-                          ))}
-                        </select>
+                          value={row.endTime || DEFAULT_END}
+                          onChange={(e) => updateRow(index, "endTime", snapTimeTo15Minutes(e.target.value))}
+                        />
                       </div>
                     </div>
-                    {row.workHours && (
+                    <div>
+                      <Label className="text-xs text-gray-500">Lunch hours</Label>
+                      <select
+                        className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm mt-0.5"
+                        value={row.lunchDuration || "0"}
+                        onChange={(e) => updateRow(index, "lunchDuration", e.target.value)}
+                      >
+                        {LUNCH_DURATION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label} hrs
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {(row.startTime || row.endTime) && (
                       <p className="text-xs text-gray-500">
                         {opts.hoursPrefix ?? "Hours"}:{" "}
-                        {(() => {
-                          const base = parseFloat(row.workHours || "0") || 0
-                          const lunchM = row.lunchDuration ? parseInt(row.lunchDuration, 10) || 0 : 0
-                          const lunchH = lunchM / 60
-                          const total = Math.max(0, base - lunchH)
-                          return total.toFixed(2)
-                        })()}
+                        {computeHours(row.startTime || DEFAULT_START, row.endTime || DEFAULT_END, row.lunchDuration).toFixed(2)}
                       </p>
                     )}
                   </div>
@@ -612,14 +622,156 @@ export default function NewEntry() {
     })
   }
 
+  const validateTmWorkPerformedDraft = (): string | null => {
+    if (!tmWorkPerformedArea) return "Select an area."
+    if (!tmWorkPerformedGroupKey) return "Select a group."
+    if (!tmWorkPerformedTaskValue) return "Select a task."
+    const groups = WORK_PERFORMED_STRUCTURE[tmWorkPerformedArea]
+    const group = groups?.find((g) => g.key === tmWorkPerformedGroupKey)
+    const task = group?.tasks.find((t) => t.value === tmWorkPerformedTaskValue)
+    if (!group || !task) return "Select a valid group and task."
+    const parseOptionalNum = (s: string): { valid: boolean; value: number } => {
+      if (s === "") return { valid: true, value: 0 }
+      const n = parseFloat(s)
+      if (Number.isNaN(n) || n < 0) return { valid: false, value: 0 }
+      return { valid: true, value: n }
+    }
+    const meta = task.meta ?? {}
+    if (meta.showQuantity ?? true) {
+      const q = parseOptionalNum(tmWorkPerformedQuantity)
+      if (!q.valid) return "Quantity must be a number ≥ 0."
+    }
+    if (meta.showPaintGallons ?? true) {
+      const p = parseOptionalNum(tmWorkPerformedPaintGallons)
+      if (!p.valid) return "Paint gallons must be a number ≥ 0."
+    }
+    if (meta.showPrimerGallons ?? true) {
+      const pr = parseOptionalNum(tmWorkPerformedPrimerGallons)
+      if (!pr.valid) return "Primer gallons must be a number ≥ 0."
+    }
+    if (meta.showLaborMinutes) {
+      const lm = parseOptionalNum(tmWorkPerformedLaborMinutes)
+      if (!lm.valid) return "Labor must be a number ≥ 0."
+      const countAfter = tmWorkPerformedEditIndex !== null ? tmWorkPerformedList.length : tmWorkPerformedList.length + 1
+      if (countAfter >= 2 && lm.value <= 0) return "With multiple tasks, labor is required for each."
+    }
+    if (meta.showCount) { const c = parseOptionalNum(tmWorkPerformedCount); if (!c.valid) return "Count must be ≥ 0." }
+    if (meta.showLinearFeet) { const lf = parseOptionalNum(tmWorkPerformedLinearFeet); if (!lf.valid) return "Linear feet must be ≥ 0." }
+    if (meta.showStairFloors) { const sf = parseOptionalNum(tmWorkPerformedStairFloors); if (!sf.valid) return "Stair floors must be ≥ 0." }
+    if (meta.showDoorCount) { const dc = parseOptionalNum(tmWorkPerformedDoorCount); if (!dc.valid) return "Door count must be ≥ 0." }
+    if (meta.showWindowCount) { const wc = parseOptionalNum(tmWorkPerformedWindowCount); if (!wc.valid) return "Window count must be ≥ 0." }
+    if (meta.showHandrailCount) { const hc = parseOptionalNum(tmWorkPerformedHandrailCount); if (!hc.valid) return "Handrail count must be ≥ 0." }
+    return null
+  }
+
+  const buildDraftTmWorkPerformedEntry = (): SavedWorkPerformedEntry | null => {
+    if (!tmWorkPerformedArea || !tmWorkPerformedGroupKey || !tmWorkPerformedTaskValue) return null
+    const groups = WORK_PERFORMED_STRUCTURE[tmWorkPerformedArea]
+    const group = groups.find((g) => g.key === tmWorkPerformedGroupKey)
+    const task = group?.tasks.find((t) => t.value === tmWorkPerformedTaskValue)
+    const groupLabel = group?.label ?? tmWorkPerformedGroupKey
+    const taskLabel = task?.label ?? tmWorkPerformedTaskValue
+    const parseNum = (s: string) => (s === "" ? 0 : Math.max(0, parseFloat(s) || 0))
+    const count = parseNum(tmWorkPerformedCount)
+    const linearFeet = parseNum(tmWorkPerformedLinearFeet)
+    const stairFloors = parseNum(tmWorkPerformedStairFloors)
+    const doorCount = parseNum(tmWorkPerformedDoorCount)
+    const windowCount = parseNum(tmWorkPerformedWindowCount)
+    const handrailCount = parseNum(tmWorkPerformedHandrailCount)
+    const measurements: WorkPerformedEntry["measurements"] = (() => {
+      const m: NonNullable<WorkPerformedEntry["measurements"]> = {}
+      if (count > 0) m.count = count
+      if (linearFeet > 0) m.linearFeet = linearFeet
+      if (stairFloors > 0) m.stairFloors = stairFloors
+      if (doorCount > 0) m.doorCount = doorCount
+      if (windowCount > 0) m.windowCount = windowCount
+      if (handrailCount > 0) m.handrailCount = handrailCount
+      return Object.keys(m).length > 0 ? m : undefined
+    })()
+    return {
+      area: tmWorkPerformedArea,
+      groupCode: tmWorkPerformedGroupKey,
+      groupLabel,
+      taskCode: tmWorkPerformedTaskValue,
+      taskLabel,
+      quantity: parseNum(tmWorkPerformedQuantity),
+      paintGallonsUsed: parseNum(tmWorkPerformedPaintGallons),
+      primerGallonsUsed: parseNum(tmWorkPerformedPrimerGallons),
+      primerSource: tmWorkPerformedPrimerSource,
+      laborMinutes: tmWorkPerformedLaborMinutes === "" ? 0 : Math.max(0, parseFloat(tmWorkPerformedLaborMinutes) || 0),
+      measurements,
+    }
+  }
+
+  const addTmWorkPerformedActivity = () => {
+    const error = validateTmWorkPerformedDraft()
+    if (error) {
+      setTmWorkPerformedValidationError(error)
+      toast({ title: "Invalid activity", description: error, variant: "destructive" })
+      return
+    }
+    setTmWorkPerformedValidationError(null)
+    const entry = buildDraftTmWorkPerformedEntry()
+    if (!entry) return
+    if (tmWorkPerformedEditIndex !== null) {
+      setTmWorkPerformedList((prev) => prev.map((item, i) => (i === tmWorkPerformedEditIndex ? entry : item)))
+      setTmWorkPerformedEditIndex(null)
+    } else {
+      setTmWorkPerformedList((prev) => [...prev, entry])
+    }
+    setTmWorkPerformedTaskValue("")
+    setTmWorkPerformedQuantity("")
+    setTmWorkPerformedPaintGallons("")
+    setTmWorkPerformedPrimerGallons("")
+    setTmWorkPerformedPrimerSource("stock")
+    setTmWorkPerformedLaborMinutes("")
+    setTmWorkPerformedCount("")
+    setTmWorkPerformedLinearFeet("")
+    setTmWorkPerformedStairFloors("")
+    setTmWorkPerformedDoorCount("")
+    setTmWorkPerformedWindowCount("")
+    setTmWorkPerformedHandrailCount("")
+  }
+
+  const startEditingTmWorkPerformed = (index: number) => {
+    const item = tmWorkPerformedList[index]
+    if (!item) return
+    const m = item.measurements ?? {}
+    setTmWorkPerformedArea(item.area)
+    setTmWorkPerformedGroupKey(item.groupCode)
+    setTmWorkPerformedTaskValue(item.taskCode)
+    setTmWorkPerformedQuantity(item.quantity > 0 ? String(item.quantity) : "")
+    setTmWorkPerformedPaintGallons(item.paintGallonsUsed > 0 ? String(item.paintGallonsUsed) : "")
+    setTmWorkPerformedPrimerGallons(item.primerGallonsUsed > 0 ? String(item.primerGallonsUsed) : "")
+    setTmWorkPerformedPrimerSource(item.primerSource)
+    setTmWorkPerformedLaborMinutes(item.laborMinutes > 0 ? String(item.laborMinutes) : "")
+    setTmWorkPerformedCount(m.count != null && m.count > 0 ? String(m.count) : "")
+    setTmWorkPerformedLinearFeet(m.linearFeet != null && m.linearFeet > 0 ? String(m.linearFeet) : "")
+    setTmWorkPerformedStairFloors(m.stairFloors != null && m.stairFloors > 0 ? String(m.stairFloors) : "")
+    setTmWorkPerformedDoorCount(m.doorCount != null && m.doorCount > 0 ? String(m.doorCount) : "")
+    setTmWorkPerformedWindowCount(m.windowCount != null && m.windowCount > 0 ? String(m.windowCount) : "")
+    setTmWorkPerformedHandrailCount(m.handrailCount != null && m.handrailCount > 0 ? String(m.handrailCount) : "")
+    setTmWorkPerformedEditIndex(index)
+  }
+
+  const removeTmWorkPerformedActivity = (index: number) => {
+    setTmWorkPerformedList((prev) => prev.filter((_, i) => i !== index))
+    setTmWorkPerformedEditIndex((prev) => (prev === null ? null : prev === index ? null : prev > index ? prev - 1 : prev))
+  }
+
   const handleSubmit = async () => {
     if (!jobId) {
       toast({ title: "Validation Error", description: "Please select a job", variant: "destructive" })
       return
     }
-    const validPainters = customerTimeEntry.painters.filter((p) => p.painterId && p.workHours)
+    const validPainters = customerTimeEntry.painters.filter((p) => {
+      if (!p.painterId || !p.startTime || !p.endTime) return false
+      const startM = parseTimeToMinutes(p.startTime)
+      const endM = parseTimeToMinutes(p.endTime)
+      return endM > startM
+    })
     if (validPainters.length === 0) {
-      toast({ title: "Validation Error", description: "Add at least one painter with start and end times", variant: "destructive" })
+      toast({ title: "Validation Error", description: "Add at least one painter with From and To times (To must be after From).", variant: "destructive" })
       return
     }
     const painterIds = new Set(validPainters.map((p) => p.painterId))
@@ -650,16 +802,13 @@ export default function NewEntry() {
     setIsSubmitting(true)
     try {
       const tmValidPainters = tmExtraWorkEnabled && tmTimeEntry
-        ? tmTimeEntry.painters.filter((p) => p.painterId && p.workHours)
+        ? tmTimeEntry.painters.filter((p) => {
+            if (!p.painterId || !p.startTime || !p.endTime) return false
+            return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+          })
         : []
       const tmHoursTotal = tmExtraWorkEnabled
-        ? tmValidPainters.reduce((sum, p) => {
-            const base = parseFloat(p.workHours || "0") || 0
-            const lunchM = p.lunchDuration ? parseInt(p.lunchDuration, 10) || 0 : 0
-            const lunchH = lunchM / 60
-            const total = Math.max(0, base - lunchH)
-            return sum + total
-          }, 0)
+        ? tmValidPainters.reduce((sum, p) => sum + computeHours(p.startTime, p.endTime, p.lunchDuration), 0)
         : 0
 
       // Primary structured work record: Work Performed (activities, quantities, materials). Notes are optional supplementary.
@@ -688,14 +837,21 @@ export default function NewEntry() {
         extraWorkDescription: tmExtraWorkEnabled ? (tmTimeEntry?.notes ?? "").trim() : "",
         tmExtraWork: tmExtraWorkEnabled && tmTimeEntry
           ? {
-              painters: tmValidPainters.map((p) => ({
-                painterId: p.painterId,
-                painterName: p.painterName,
-                startTime: "",
-                endTime: "",
-                lunchStart: "",
-                lunchEnd: "",
-              })),
+              painters: tmValidPainters.map((p) => {
+                const { lunchStart, lunchEnd } = durationToLunchStartEnd(
+                  p.startTime,
+                  p.endTime,
+                  parseInt(p.lunchDuration, 10) || 0
+                )
+                return {
+                  painterId: p.painterId,
+                  painterName: p.painterName,
+                  startTime: p.startTime,
+                  endTime: p.endTime,
+                  lunchStart,
+                  lunchEnd,
+                }
+              }),
               notes: (tmTimeEntry.notes ?? "").trim(),
               totalHours: Number(tmHoursTotal.toFixed(2)),
               sundryItems: tmSundryItems.filter((i) => i.quantity > 0),
@@ -717,18 +873,18 @@ export default function NewEntry() {
           : undefined,
         sundryItems: sundryItems.filter((i) => i.quantity > 0),
         painters: validPainters.map((p) => {
-          const baseHours = parseFloat(p.workHours || "0") || 0
-          const lunchM = p.lunchDuration ? parseInt(p.lunchDuration, 10) || 0 : 0
-          const lunchH = lunchM / 60
-          const totalHours = Math.max(0, baseHours - lunchH)
+          const { lunchStart, lunchEnd } = durationToLunchStartEnd(
+            p.startTime,
+            p.endTime,
+            parseInt(p.lunchDuration, 10) || 0
+          )
           return {
             painterId: p.painterId,
             painterName: p.painterName,
-            startTime: "",
-            endTime: "",
-            lunchStart: "",
-            lunchEnd: "",
-            totalHours,
+            startTime: p.startTime,
+            endTime: p.endTime,
+            lunchStart,
+            lunchEnd,
           }
         }),
       }
@@ -761,26 +917,55 @@ export default function NewEntry() {
 
   const isFormValid =
     jobId &&
-    customerTimeEntry.painters.some((p) => p.painterId && p.workHours) &&
+    customerTimeEntry.painters.some((p) => {
+      if (!p.painterId || !p.startTime || !p.endTime) return false
+      return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+    }) &&
     customerTimeEntry.painters.filter((p) => p.painterId).length === new Set(customerTimeEntry.painters.filter((p) => p.painterId).map((p) => p.painterId)).size
 
   const customerHoursTotal = customerTimeEntry.painters.reduce((sum, p) => {
-    if (!p.painterId || !p.workHours) return sum
-    const base = parseFloat(p.workHours || "0") || 0
-    const lunchM = p.lunchDuration ? parseInt(p.lunchDuration, 10) || 0 : 0
-    const lunchH = lunchM / 60
-    const total = Math.max(0, base - lunchH)
-    return sum + total
+    if (!p.painterId || !p.startTime || !p.endTime) return sum
+    return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
   }, 0)
   const tmHoursTotalPreview = (tmTimeEntry?.painters ?? []).reduce((sum, p) => {
-    if (!p.painterId || !p.workHours) return sum
-    const base = parseFloat(p.workHours || "0") || 0
-    const lunchM = p.lunchDuration ? parseInt(p.lunchDuration, 10) || 0 : 0
-    const lunchH = lunchM / 60
-    const total = Math.max(0, base - lunchH)
-    return sum + total
+    if (!p.painterId || !p.startTime || !p.endTime) return sum
+    return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
   }, 0)
   const selectedJobName = jobId ? (projects.find((j) => j.id === jobId)?.name ?? "Selected job") : "No job selected"
+
+  const hasTmData =
+    tmExtraWorkEnabled &&
+    (() => {
+      const validPainters = (tmTimeEntry?.painters ?? []).filter(
+        (p) => p.painterId && p.startTime && p.endTime && parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+      )
+      const hasSundries = (tmSundryItems ?? []).some((i) => i.quantity > 0)
+      const hasWork = (tmWorkPerformedList ?? []).length > 0
+      return validPainters.length > 0 || hasSundries || hasWork
+    })()
+
+  const clearTmData = () => {
+    setTmTimeEntry({ painters: [], notes: "" })
+    setTmSundryItems([])
+    setTmWorkPerformedList([])
+    setTmWorkPerformedArea("")
+    setTmWorkPerformedGroupKey("")
+    setTmWorkPerformedTaskValue("")
+    setTmWorkPerformedQuantity("")
+    setTmWorkPerformedPaintGallons("")
+    setTmWorkPerformedPrimerGallons("")
+    setTmWorkPerformedPrimerSource("stock")
+    setTmWorkPerformedLaborMinutes("")
+    setTmWorkPerformedCount("")
+    setTmWorkPerformedLinearFeet("")
+    setTmWorkPerformedStairFloors("")
+    setTmWorkPerformedDoorCount("")
+    setTmWorkPerformedWindowCount("")
+    setTmWorkPerformedHandrailCount("")
+    setTmWorkPerformedEditIndex(null)
+    setTmWorkPerformedValidationError(null)
+    setTmDetailsOpen(false)
+  }
 
   return (
     <Layout>
@@ -987,7 +1172,7 @@ export default function NewEntry() {
                   />
                 </label>
 
-                {tmExtraWorkEnabled && (
+                {tmExtraWorkEnabled && !hasTmData && (
                   <button
                     type="button"
                     onClick={() => setTmDetailsOpen(true)}
@@ -996,6 +1181,37 @@ export default function NewEntry() {
                     <ClipboardList size={16} className="mr-2" />
                     Add T&amp;M Details
                   </button>
+                )}
+                {hasTmData && (
+                  <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-gray-800">T&amp;M Extra Work</h3>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {(tmTimeEntry?.painters ?? []).filter((p) => p.painterId && p.startTime && p.endTime).length} painter(s) • {tmHoursTotalPreview.toFixed(1)} hrs
+                          {(tmSundryItems ?? []).some((i) => i.quantity > 0) && " • Sundries"}
+                          {(tmWorkPerformedList ?? []).length > 0 && ` • ${tmWorkPerformedList.length} task(s)`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTmDetailsOpen(true)}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearTmData}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          aria-label="Remove T&M"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1748,8 +1964,158 @@ export default function NewEntry() {
                           </select>
                         </div>
                       )}
-                      {/* For brevity, T&M task field controls mirror the main ones but are driven by tm* state.
-                          They can be further refactored to share a single rendering function. */}
+                      {tmWorkPerformedTaskValue && (() => {
+                        const selectedGroup = WORK_PERFORMED_STRUCTURE[tmWorkPerformedArea].find((g) => g.key === tmWorkPerformedGroupKey)
+                        const selectedTask = selectedGroup?.tasks.find((t) => t.value === tmWorkPerformedTaskValue)
+                        const meta = selectedTask?.meta ?? {}
+                        const showQuantity = meta.showQuantity ?? true
+                        const quantityLabel = meta.quantityLabel ?? "Quantity of work (if applicable)"
+                        const showPaintGallons = meta.showPaintGallons ?? true
+                        const showPrimerGallons = meta.showPrimerGallons ?? true
+                        const showLaborMinutes = meta.showLaborMinutes ?? false
+                        const showLinearFeet = meta.showLinearFeet ?? false
+                        const linearFeetLabel = meta.linearFeetLabel ?? "Linear feet (if applicable)"
+                        const showStairFloors = meta.showStairFloors ?? false
+                        const stairFloorsLabel = meta.stairFloorsLabel ?? "Stair floors (if applicable)"
+                        return (
+                          <div className="space-y-3 mt-4">
+                            {showQuantity && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">{quantityLabel}</Label>
+                                <input type="number" inputMode="decimal" min={0} step={0.01} placeholder="0" value={tmWorkPerformedQuantity}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedQuantity(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedQuantity(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {showPaintGallons && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Paint gallons used (if applicable)</Label>
+                                <input type="number" inputMode="decimal" min={0} step={0.01} placeholder="0" value={tmWorkPerformedPaintGallons}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedPaintGallons(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedPaintGallons(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {showPrimerGallons && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Primer gallons used (if applicable)</Label>
+                                <input type="number" inputMode="decimal" min={0} step={0.01} placeholder="0" value={tmWorkPerformedPrimerGallons}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedPrimerGallons(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedPrimerGallons(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                                <div className="flex rounded-md border border-gray-300 bg-gray-100 p-0.5 mt-2 w-full max-w-[200px]">
+                                  <button type="button" onClick={() => setTmWorkPerformedPrimerSource("stock")}
+                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${tmWorkPerformedPrimerSource === "stock" ? "bg-primary text-white" : "text-gray-600"}`}>Stock</button>
+                                  <button type="button" onClick={() => setTmWorkPerformedPrimerSource("retail")}
+                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${tmWorkPerformedPrimerSource === "retail" ? "bg-primary text-white" : "text-gray-600"}`}>Purchased</button>
+                                </div>
+                              </div>
+                            )}
+                            {showLaborMinutes && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">
+                                  {(tmWorkPerformedEditIndex !== null ? tmWorkPerformedList.length >= 2 : tmWorkPerformedList.length >= 1) ? "Labor man-hours (required with multiple tasks)" : "Labor man-hours (if applicable)"}
+                                </Label>
+                                <select value={tmWorkPerformedLaborMinutes} onChange={(e) => { setTmWorkPerformedLaborMinutes(e.target.value); setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800">
+                                  <option value="">Select hours</option>
+                                  {LABOR_MAN_HOUR_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label} hrs</option>)}
+                                </select>
+                              </div>
+                            )}
+                            {showLinearFeet && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">{linearFeetLabel}</Label>
+                                <input type="number" inputMode="decimal" min={0} step={0.01} placeholder="0" value={tmWorkPerformedLinearFeet}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedLinearFeet(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedLinearFeet(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {showStairFloors && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">{stairFloorsLabel}</Label>
+                                <input type="number" inputMode="numeric" min={0} step={1} placeholder="0" value={tmWorkPerformedStairFloors}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedStairFloors(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedStairFloors(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {meta.showCount && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Count (if applicable)</Label>
+                                <input type="number" inputMode="numeric" min={0} step={1} placeholder="0" value={tmWorkPerformedCount}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedCount(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedCount(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {meta.showDoorCount && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Door count (if applicable)</Label>
+                                <input type="number" inputMode="numeric" min={0} step={1} placeholder="0" value={tmWorkPerformedDoorCount}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedDoorCount(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedDoorCount(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {meta.showWindowCount && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Window count (if applicable)</Label>
+                                <input type="number" inputMode="numeric" min={0} step={1} placeholder="0" value={tmWorkPerformedWindowCount}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedWindowCount(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedWindowCount(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                            {meta.showHandrailCount && (
+                              <div>
+                                <Label className="text-gray-700 font-semibold mb-1 block">Handrail count (if applicable)</Label>
+                                <input type="number" inputMode="numeric" min={0} step={1} placeholder="0" value={tmWorkPerformedHandrailCount}
+                                  onChange={(e) => { const v = e.target.value; if (v === "") setTmWorkPerformedHandrailCount(""); else { const n = parseFloat(v); if (!Number.isNaN(n) && n >= 0) setTmWorkPerformedHandrailCount(v) } setTmWorkPerformedValidationError(null) }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800" />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
+                      {tmWorkPerformedValidationError && (
+                        <p className="text-sm text-red-600 font-medium mt-2" role="alert">{tmWorkPerformedValidationError}</p>
+                      )}
+                      <button type="button" onClick={addTmWorkPerformedActivity}
+                        className="w-full py-3 px-4 rounded-lg border-2 border-primary bg-primary/10 text-primary font-semibold text-sm hover:bg-primary/20 transition-colors mt-4">
+                        {tmWorkPerformedEditIndex !== null ? "Update Task" : "Add Task"}
+                      </button>
+                      {tmWorkPerformedList.length > 0 && (
+                        <div className="pt-2 mt-4">
+                          <h3 className="text-base font-bold text-gray-800 mb-3">Saved T&amp;M activities ({tmWorkPerformedList.length})</h3>
+                          <div className="space-y-3">
+                            {tmWorkPerformedList.map((item, idx) => (
+                              <div key={idx} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm relative">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <div className="flex flex-wrap items-baseline gap-2 min-w-0">
+                                    <span className="text-xs font-semibold uppercase text-gray-500">{item.area === "interior" ? "Interior" : "Exterior"}</span>
+                                    <span className="text-gray-500 text-xs">•</span>
+                                    <span className="text-gray-700 font-medium">{item.groupLabel}</span>
+                                    <span className="text-gray-500 text-xs">•</span>
+                                    <span className="text-gray-800 font-semibold">{item.taskLabel}</span>
+                                  </div>
+                                  <div className="flex shrink-0 gap-0.5">
+                                    <button type="button" onClick={() => startEditingTmWorkPerformed(idx)} className="p-1.5 rounded-md text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors" aria-label="Edit activity"><Pencil size={18} /></button>
+                                    <button type="button" onClick={() => removeTmWorkPerformedActivity(idx)} className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" aria-label="Remove activity"><Trash2 size={18} /></button>
+                                  </div>
+                                </div>
+                                <dl className="text-sm text-gray-600 space-y-0.5">
+                                  {item.quantity > 0 && <div><dt className="inline font-medium text-gray-500">Quantity: </dt><dd className="inline">{item.quantity}</dd></div>}
+                                  {item.paintGallonsUsed > 0 && <div><dt className="inline font-medium text-gray-500">Paint: </dt><dd className="inline">{item.paintGallonsUsed} gal</dd></div>}
+                                  {item.primerGallonsUsed > 0 && <div><dt className="inline font-medium text-gray-500">Primer: </dt><dd className="inline">{item.primerGallonsUsed} gal</dd></div>}
+                                  <div><dt className="inline font-medium text-gray-500">Primer source: </dt><dd className="inline capitalize">{item.primerSource}</dd></div>
+                                  {item.laborMinutes > 0 && <div><dt className="inline font-medium text-gray-500">Labor: </dt><dd className="inline">{item.laborMinutes} min</dd></div>}
+                                  {item.measurements?.count != null && item.measurements.count > 0 && <div><dt className="inline font-medium text-gray-500">Count: </dt><dd className="inline">{item.measurements.count}</dd></div>}
+                                  {item.measurements?.linearFeet != null && item.measurements.linearFeet > 0 && <div><dt className="inline font-medium text-gray-500">Linear feet: </dt><dd className="inline">{item.measurements.linearFeet}</dd></div>}
+                                  {item.measurements?.stairFloors != null && item.measurements.stairFloors > 0 && <div><dt className="inline font-medium text-gray-500">Stair floors: </dt><dd className="inline">{item.measurements.stairFloors}</dd></div>}
+                                  {item.measurements?.doorCount != null && item.measurements.doorCount > 0 && <div><dt className="inline font-medium text-gray-500">Doors: </dt><dd className="inline">{item.measurements.doorCount}</dd></div>}
+                                  {item.measurements?.windowCount != null && item.measurements.windowCount > 0 && <div><dt className="inline font-medium text-gray-500">Windows: </dt><dd className="inline">{item.measurements.windowCount}</dd></div>}
+                                  {item.measurements?.handrailCount != null && item.measurements.handrailCount > 0 && <div><dt className="inline font-medium text-gray-500">Handrails: </dt><dd className="inline">{item.measurements.handrailCount}</dd></div>}
+                                </dl>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="mt-3 text-sm text-gray-500">Select a category to continue.</p>
