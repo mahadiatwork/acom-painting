@@ -803,9 +803,9 @@ export default function NewEntry() {
     try {
       const tmValidPainters = tmExtraWorkEnabled && tmTimeEntry
         ? tmTimeEntry.painters.filter((p) => {
-            if (!p.painterId || !p.startTime || !p.endTime) return false
-            return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
-          })
+          if (!p.painterId || !p.startTime || !p.endTime) return false
+          return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+        })
         : []
       const tmHoursTotal = tmExtraWorkEnabled
         ? tmValidPainters.reduce((sum, p) => sum + computeHours(p.startTime, p.endTime, p.lunchDuration), 0)
@@ -826,52 +826,14 @@ export default function NewEntry() {
         measurements: wp.measurements ?? {},
         sortOrder: index,
       }))
-      const payload = {
+      const mainEntry = {
         jobId,
         jobName: projects?.find((j) => j.id === jobId)?.name ?? "",
         date,
-        workPerformed: workPerformedPayload,
         notes: notes || "",
         changeOrder: "",
-        extraHours: tmExtraWorkEnabled ? tmHoursTotal.toFixed(2) : "0",
-        extraWorkDescription: tmExtraWorkEnabled ? (tmTimeEntry?.notes ?? "").trim() : "",
-        tmExtraWork: tmExtraWorkEnabled && tmTimeEntry
-          ? {
-              painters: tmValidPainters.map((p) => {
-                const { lunchStart, lunchEnd } = durationToLunchStartEnd(
-                  p.startTime,
-                  p.endTime,
-                  parseInt(p.lunchDuration, 10) || 0
-                )
-                return {
-                  painterId: p.painterId,
-                  painterName: p.painterName,
-                  startTime: p.startTime,
-                  endTime: p.endTime,
-                  lunchStart,
-                  lunchEnd,
-                }
-              }),
-              notes: (tmTimeEntry.notes ?? "").trim(),
-              totalHours: Number(tmHoursTotal.toFixed(2)),
-              sundryItems: tmSundryItems.filter((i) => i.quantity > 0),
-              workPerformed: tmWorkPerformedList.map((wp, index) => ({
-                area: wp.area,
-                groupCode: wp.groupCode,
-                groupLabel: wp.groupLabel,
-                taskCode: wp.taskCode,
-                taskLabel: wp.taskLabel,
-                quantity: wp.quantity,
-                paintGallonsUsed: wp.paintGallonsUsed,
-                primerGallonsUsed: wp.primerGallonsUsed,
-                primerSource: wp.primerSource,
-                laborMinutes: wp.laborMinutes,
-                measurements: wp.measurements ?? {},
-                sortOrder: index,
-              })),
-            }
-          : undefined,
         sundryItems: sundryItems.filter((i) => i.quantity > 0),
+        workPerformed: workPerformedPayload,
         painters: validPainters.map((p) => {
           const { lunchStart, lunchEnd } = durationToLunchStartEnd(
             p.startTime,
@@ -888,6 +850,51 @@ export default function NewEntry() {
           }
         }),
       }
+
+      const tmEntries = tmExtraWorkEnabled && tmTimeEntry
+        ? [{
+          jobId: mainEntry.jobId,
+          jobName: mainEntry.jobName,
+          date: mainEntry.date,
+          notes: (tmTimeEntry.notes ?? "").trim(),
+          changeOrder: "",
+          displayLabel: (tmTimeEntry.notes ?? "").trim()
+            ? `T&M Extra Work - ${(tmTimeEntry.notes ?? "").trim()}`
+            : "T&M Extra Work #1",
+          sundryItems: tmSundryItems.filter((i) => i.quantity > 0),
+          workPerformed: tmWorkPerformedList.map((wp, index) => ({
+            area: wp.area,
+            groupCode: wp.groupCode,
+            groupLabel: wp.groupLabel,
+            taskCode: wp.taskCode,
+            taskLabel: wp.taskLabel,
+            quantity: wp.quantity,
+            paintGallonsUsed: wp.paintGallonsUsed,
+            primerGallonsUsed: wp.primerGallonsUsed,
+            primerSource: wp.primerSource,
+            laborMinutes: wp.laborMinutes,
+            measurements: wp.measurements ?? {},
+            sortOrder: index,
+          })),
+          painters: tmValidPainters.map((p) => {
+            const { lunchStart, lunchEnd } = durationToLunchStartEnd(
+              p.startTime,
+              p.endTime,
+              parseInt(p.lunchDuration, 10) || 0
+            )
+            return {
+              painterId: p.painterId,
+              painterName: p.painterName,
+              startTime: p.startTime,
+              endTime: p.endTime,
+              lunchStart,
+              lunchEnd,
+            }
+          }),
+        }]
+        : []
+
+      const payload = { mainEntry, tmEntries }
       const res = await fetch("/api/time-entries", {
         method: "POST",
         headers: {
@@ -988,11 +995,10 @@ export default function NewEntry() {
         <div className="max-w-2xl md:max-w-none xl:max-w-2xl mx-auto flex px-2">
           <button
             onClick={() => setActiveTab("crew")}
-            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${
-              activeTab === "crew"
+            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "crew"
                 ? "text-primary border-primary"
                 : "text-gray-500 border-transparent hover:text-gray-700"
-            }`}
+              }`}
           >
             <span className="flex items-center justify-center gap-1.5">
               <Clock size={18} className="shrink-0" /> Crew &amp; Time
@@ -1000,11 +1006,10 @@ export default function NewEntry() {
           </button>
           <button
             onClick={() => setActiveTab("sundry")}
-            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${
-              activeTab === "sundry"
+            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "sundry"
                 ? "text-primary border-primary"
                 : "text-gray-500 border-transparent hover:text-gray-700"
-            }`}
+              }`}
           >
             <span className="flex items-center justify-center gap-1.5">
               <Package size={18} className="shrink-0" /> Sundries
@@ -1012,11 +1017,10 @@ export default function NewEntry() {
           </button>
           <button
             onClick={() => setActiveTab("work")}
-            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${
-              activeTab === "work"
+            className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "work"
                 ? "text-primary border-primary"
                 : "text-gray-500 border-transparent hover:text-gray-700"
-            }`}
+              }`}
           >
             <span className="flex items-center justify-center gap-1.5">
               <ClipboardList size={18} className="shrink-0" /> Work Performed
@@ -1297,7 +1301,7 @@ export default function NewEntry() {
                   {workPerformedGroupKey && (
                     <div>
                       <Label className="text-gray-700 font-semibold mb-2 block">Task</Label>
-                    <select
+                      <select
                         value={workPerformedTaskValue}
                         onChange={(e) => {
                           setWorkPerformedTaskValue(e.target.value)
@@ -1437,22 +1441,20 @@ export default function NewEntry() {
                                   <button
                                     type="button"
                                     onClick={() => setWorkPerformedPrimerSource("stock")}
-                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${
-                                      workPerformedPrimerSource === "stock"
+                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "stock"
                                         ? "bg-primary text-white"
                                         : "text-gray-600"
-                                    }`}
+                                      }`}
                                   >
                                     Stock
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setWorkPerformedPrimerSource("retail")}
-                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${
-                                      workPerformedPrimerSource === "retail"
+                                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "retail"
                                         ? "bg-primary text-white"
                                         : "text-gray-600"
-                                    }`}
+                                      }`}
                                   >
                                     Purchased
                                   </button>
@@ -1733,27 +1735,24 @@ export default function NewEntry() {
                 <button
                   type="button"
                   onClick={() => setTmActiveTab("crew")}
-                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${
-                    tmActiveTab === "crew" ? "text-primary border-primary" : "text-gray-500 border-transparent"
-                  }`}
+                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${tmActiveTab === "crew" ? "text-primary border-primary" : "text-gray-500 border-transparent"
+                    }`}
                 >
                   Crew &amp; Time
                 </button>
                 <button
                   type="button"
                   onClick={() => setTmActiveTab("sundry")}
-                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${
-                    tmActiveTab === "sundry" ? "text-primary border-primary" : "text-gray-500 border-transparent"
-                  }`}
+                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${tmActiveTab === "sundry" ? "text-primary border-primary" : "text-gray-500 border-transparent"
+                    }`}
                 >
                   Sundries
                 </button>
                 <button
                   type="button"
                   onClick={() => setTmActiveTab("work")}
-                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${
-                    tmActiveTab === "work" ? "text-primary border-primary" : "text-gray-500 border-transparent"
-                  }`}
+                  className={`flex-1 py-2 text-center text-xs font-semibold border-b-2 ${tmActiveTab === "work" ? "text-primary border-primary" : "text-gray-500 border-transparent"
+                    }`}
                 >
                   Work Performed
                 </button>
@@ -1806,9 +1805,8 @@ export default function NewEntry() {
                       return (
                         <div
                           key={itemName}
-                          className={`flex items-center justify-between p-4 rounded-lg border ${
-                            q > 0 ? "bg-primary/5 border-primary/30" : "bg-white border-gray-200"
-                          }`}
+                          className={`flex items-center justify-between p-4 rounded-lg border ${q > 0 ? "bg-primary/5 border-primary/30" : "bg-white border-gray-200"
+                            }`}
                         >
                           <span className={`font-medium ${q > 0 ? "text-primary" : "text-gray-700"}`}>
                             {itemName}
@@ -1823,9 +1821,8 @@ export default function NewEntry() {
                               <Minus size={18} />
                             </button>
                             <span
-                              className={`w-8 text-center font-bold ${
-                                q > 0 ? "text-primary" : "text-gray-400"
-                              }`}
+                              className={`w-8 text-center font-bold ${q > 0 ? "text-primary" : "text-gray-400"
+                                }`}
                             >
                               {q}
                             </span>
@@ -1865,11 +1862,10 @@ export default function NewEntry() {
                         setTmWorkPerformedEditIndex(null)
                         setTmWorkPerformedValidationError(null)
                       }}
-                      className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${
-                        tmWorkPerformedArea === "interior"
+                      className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${tmWorkPerformedArea === "interior"
                           ? "bg-primary text-white shadow-sm"
                           : "text-gray-600 hover:text-gray-800"
-                      }`}
+                        }`}
                     >
                       Interior
                     </button>
@@ -1886,11 +1882,10 @@ export default function NewEntry() {
                         setTmWorkPerformedEditIndex(null)
                         setTmWorkPerformedValidationError(null)
                       }}
-                      className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${
-                        tmWorkPerformedArea === "exterior"
+                      className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${tmWorkPerformedArea === "exterior"
                           ? "bg-primary text-white shadow-sm"
                           : "text-gray-600 hover:text-gray-800"
-                      }`}
+                        }`}
                     >
                       Exterior
                     </button>

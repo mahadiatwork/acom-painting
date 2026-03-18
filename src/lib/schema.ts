@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, index, unique } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { pgTable, text, varchar, boolean, index, unique, uuid, integer, numeric, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -107,6 +107,137 @@ export const timesheetPainters = pgTable("timesheet_painters", {
   uniquePainter: unique("tp_timesheet_painter_unique").on(table.timesheetId, table.painterId),
 }));
 
+export const workEntries = pgTable("work_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  entryType: text("entry_type").notNull().default("main"),
+  parentEntryId: uuid("parent_entry_id"),
+  foremanId: text("foreman_id").notNull(),
+  jobId: text("job_id").notNull(),
+  jobName: text("job_name").notNull(),
+  entryDate: date("entry_date").notNull(),
+  notes: text("notes").notNull().default(""),
+  changeOrder: text("change_order").notNull().default(""),
+  status: text("status").notNull().default("draft"),
+  tmSequence: integer("tm_sequence"),
+  displayLabel: text("display_label"),
+  totalCrewHours: numeric("total_crew_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  tmCount: integer("tm_count").notNull().default(0),
+  tmTotalHours: numeric("tm_total_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  tmTotalLaborCost: numeric("tm_total_labor_cost", { precision: 12, scale: 2 }).notNull().default("0"),
+  grandTotalHours: numeric("grand_total_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  tmSummaryText: text("tm_summary_text").notNull().default(""),
+  zohoRecordId: text("zoho_record_id"),
+  syncState: text("sync_state").notNull().default("pending"),
+  lastSyncError: text("last_sync_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  foremanDateIdx: index("work_entries_foreman_date_idx").on(table.foremanId, table.entryDate),
+  parentIdx: index("work_entries_parent_idx").on(table.parentEntryId),
+  jobIdx: index("work_entries_job_idx").on(table.jobId),
+  syncStateIdx: index("work_entries_sync_state_idx").on(table.syncState),
+  entryTypeIdx: index("work_entries_entry_type_idx").on(table.entryType),
+  tmSequenceUnique: unique("work_entries_tm_sequence_unique").on(table.parentEntryId, table.tmSequence),
+}));
+
+export const workEntryCrewRows = pgTable("work_entry_crew_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workEntryId: uuid("work_entry_id").notNull(),
+  painterId: varchar("painter_id").notNull(),
+  painterName: text("painter_name").notNull(),
+  startTime: text("start_time").notNull().default(""),
+  endTime: text("end_time").notNull().default(""),
+  lunchStart: text("lunch_start").notNull().default(""),
+  lunchEnd: text("lunch_end").notNull().default(""),
+  totalHours: numeric("total_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  payRateType: text("pay_rate_type"),
+  laborCost: numeric("labor_cost", { precision: 12, scale: 2 }),
+  zohoRecordId: text("zoho_record_id"),
+  syncState: text("sync_state").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  workEntryIdx: index("work_entry_crew_rows_entry_idx").on(table.workEntryId),
+  painterIdx: index("work_entry_crew_rows_painter_idx").on(table.painterId),
+  syncStateIdx: index("work_entry_crew_rows_sync_state_idx").on(table.syncState),
+}));
+
+export const workEntrySundryRows = pgTable("work_entry_sundry_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workEntryId: uuid("work_entry_id").notNull(),
+  sundryName: text("sundry_name").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull().default("0"),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2 }),
+  totalCost: numeric("total_cost", { precision: 12, scale: 2 }),
+  zohoRecordId: text("zoho_record_id"),
+  syncState: text("sync_state").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  workEntryIdx: index("work_entry_sundry_rows_entry_idx").on(table.workEntryId),
+  syncStateIdx: index("work_entry_sundry_rows_sync_state_idx").on(table.syncState),
+}));
+
+export const workEntryWorkRows = pgTable("work_entry_work_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workEntryId: uuid("work_entry_id").notNull(),
+  area: text("area").notNull(),
+  groupCode: text("group_code").notNull(),
+  groupLabel: text("group_label").notNull(),
+  taskCode: text("task_code").notNull(),
+  taskLabel: text("task_label").notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull().default("0"),
+  laborHours: numeric("labor_hours", { precision: 12, scale: 2 }).notNull().default("0"),
+  paintGallons: numeric("paint_gallons", { precision: 12, scale: 2 }).notNull().default("0"),
+  primerGallons: numeric("primer_gallons", { precision: 12, scale: 2 }).notNull().default("0"),
+  primerSource: text("primer_source").notNull().default("stock"),
+  count: integer("count"),
+  linearFeet: numeric("linear_feet", { precision: 12, scale: 2 }),
+  stairFloors: integer("stair_floors"),
+  doorCount: integer("door_count"),
+  windowCount: integer("window_count"),
+  handrailCount: integer("handrail_count"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  zohoRecordId: text("zoho_record_id"),
+  syncState: text("sync_state").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  workEntryIdx: index("work_entry_work_rows_entry_idx").on(table.workEntryId),
+  taskIdx: index("work_entry_work_rows_task_idx").on(table.taskCode),
+  syncStateIdx: index("work_entry_work_rows_sync_state_idx").on(table.syncState),
+}));
+
+export const workEntriesRelations = relations(workEntries, ({ one, many }) => ({
+  parent: one(workEntries, {
+    fields: [workEntries.parentEntryId],
+    references: [workEntries.id],
+    relationName: "work_entries_parent",
+  }),
+  children: many(workEntries, { relationName: "work_entries_parent" }),
+  crewRows: many(workEntryCrewRows),
+  sundryRows: many(workEntrySundryRows),
+  workRows: many(workEntryWorkRows),
+}));
+
+export const workEntryCrewRowsRelations = relations(workEntryCrewRows, ({ one }) => ({
+  workEntry: one(workEntries, {
+    fields: [workEntryCrewRows.workEntryId],
+    references: [workEntries.id],
+  }),
+}));
+
+export const workEntrySundryRowsRelations = relations(workEntrySundryRows, ({ one }) => ({
+  workEntry: one(workEntries, {
+    fields: [workEntrySundryRows.workEntryId],
+    references: [workEntries.id],
+  }),
+}));
+
+export const workEntryWorkRowsRelations = relations(workEntryWorkRows, ({ one }) => ({
+  workEntry: one(workEntries, {
+    fields: [workEntryWorkRows.workEntryId],
+    references: [workEntries.id],
+  }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -148,3 +279,7 @@ export type Project = typeof projects.$inferSelect;
 export type UserProject = typeof userProjects.$inferSelect;
 export type Painter = typeof painters.$inferSelect;
 export type TimesheetPainter = typeof timesheetPainters.$inferSelect;
+export type WorkEntry = typeof workEntries.$inferSelect;
+export type WorkEntryCrewRow = typeof workEntryCrewRows.$inferSelect;
+export type WorkEntrySundryRow = typeof workEntrySundryRows.$inferSelect;
+export type WorkEntryWorkRow = typeof workEntryWorkRows.$inferSelect;

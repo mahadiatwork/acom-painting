@@ -149,191 +149,418 @@ export interface WorkPerformedEntry {
  * - Add a new task: push a WorkPerformedTask into the group's tasks array.
  */
 export const WORK_PERFORMED_STRUCTURE: Record<WorkPerformedAreaKey, WorkPerformedGroup[]> = {
+  // ─── INTERIOR ───────────────────────────────────────────────────────────────
   interior: [
+    // 1. Gyp Walls/Ceilings — 10 tasks from spreadsheet
     {
-      key: "walls",
-      label: "Walls",
+      key: "gyp-walls-ceilings",
+      label: "Gyp Walls/Ceilings",
       tasks: [
+        // Prime sub-group
         {
-          value: "prime-walls",
-          label: "Prime walls",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Wall area (if applicable)",
-            showPaintGallons: false,
-            showPrimerGallons: true,
-            showLaborMinutes: true,
-          },
+          value: "prime-gyp-cut-roll-standard",
+          label: "Prime gyp walls/ceilings cut/roll – standard height",
+          meta: { showQuantity: false, showPaintGallons: false, showPrimerGallons: true, showLaborMinutes: true },
         },
         {
-          value: "paint-walls",
-          label: "Paint walls",
-          meta: {
-            showQuantity: true,
-            showPaintGallons: true,
-            showPrimerGallons: false,
-          },
+          value: "prime-gyp-spray-standard",
+          label: "Prime gyp walls/ceilings spray – standard height",
+          meta: { showQuantity: false, showPaintGallons: false, showPrimerGallons: true, showLaborMinutes: true },
         },
-        { value: "spray-walls", label: "Spray walls" },
-        { value: "cut-and-roll-walls", label: "Cut and roll walls" },
+        {
+          value: "prime-gyp-cut-roll-tall",
+          label: "Prime gyp walls/ceilings cut/roll – tall",
+          meta: { showQuantity: false, showPaintGallons: false, showPrimerGallons: true, showLaborMinutes: true },
+        },
+        {
+          value: "prime-gyp-spray-tall",
+          label: "Prime gyp walls/ceilings spray – tall",
+          meta: { showQuantity: false, showPaintGallons: false, showPrimerGallons: true, showLaborMinutes: true },
+        },
+        // Paint sub-group
+        {
+          value: "paint-gyp-cut-roll-standard",
+          label: "Paint gyp walls/ceilings cut/roll – standard height",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-gyp-spray-standard",
+          label: "Paint gyp walls/ceilings spray – standard height",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-gyp-cut-roll-tall",
+          label: "Paint gyp walls/ceilings cut/roll – tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-gyp-spray-tall",
+          label: "Paint gyp walls/ceilings spray – tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        // Mask + different-color ceiling
+        {
+          value: "mask-paint-gyp-ceiling-diff-color-spray-standard",
+          label: "Mask and paint gyp ceilings different color spray – standard height",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "mask-paint-gyp-ceiling-diff-color-spray-tall",
+          label: "Mask and paint gyp ceilings different color spray – tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
       ],
     },
+
+    // 2. Dryfall Ceilings — 2 tasks
     {
-      key: "doors",
-      label: "Doors",
+      key: "dryfall-ceilings",
+      label: "Dryfall Ceilings",
       tasks: [
         {
-          value: "paint-door-frames",
-          label: "Paint door frames",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Number of doors (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-          },
+          value: "mask-paint-dryfall-ceiling-low",
+          label: "Mask and paint dryfall ceiling 15' or lower",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "mask-paint-dryfall-ceiling-tall",
+          label: "Mask and paint dryfall ceiling tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
       ],
     },
+
+    // 3. Block Walls — 4 tasks
+    {
+      key: "block-walls",
+      label: "Block Walls",
+      tasks: [
+        {
+          value: "paint-block-walls-cut-roll-standard",
+          label: "Paint block walls cut/roll – standard height",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-block-walls-spray-standard",
+          label: "Paint block walls spray – standard height",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-block-walls-cut-roll-tall",
+          label: "Paint block walls cut/roll – tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-block-walls-spray-tall",
+          label: "Paint block walls spray – tall",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+      ],
+    },
+
+    // 4. Doors/Frames — 8 tasks
+    {
+      key: "doors-frames",
+      label: "Doors/Frames",
+      tasks: [
+        {
+          value: "paint-hm-door-frames-spray",
+          label: "Paint HM door frames spray",
+          meta: { showQuantity: true, quantityLabel: "Number of frames (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-hm-door-frames-cut-roll",
+          label: "Paint HM door frames cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of frames (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-hm-doors-spray",
+          label: "Paint HM doors spray",
+          meta: { showQuantity: true, quantityLabel: "Number of doors (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-hm-doors-cut-roll",
+          label: "Paint HM doors cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of doors (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "prime-paint-wood-door-frames-spray",
+          label: "Prime and paint wood door frames spray",
+          meta: { showQuantity: true, quantityLabel: "Number of frames (if applicable)", showPaintGallons: true, showPrimerGallons: true, showLaborMinutes: true },
+        },
+        {
+          value: "prime-paint-wood-door-frames-cut-roll",
+          label: "Prime and paint wood door frames cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of frames (if applicable)", showPaintGallons: true, showPrimerGallons: true, showLaborMinutes: true },
+        },
+        {
+          value: "prime-paint-wood-doors-spray",
+          label: "Prime and paint wood doors spray",
+          meta: { showQuantity: true, quantityLabel: "Number of doors (if applicable)", showPaintGallons: true, showPrimerGallons: true, showLaborMinutes: true },
+        },
+        {
+          value: "prime-paint-wood-doors-cut-roll",
+          label: "Prime and paint wood doors cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of doors (if applicable)", showPaintGallons: true, showPrimerGallons: true, showLaborMinutes: true },
+        },
+      ],
+    },
+
+    // 5. Windows — 6 tasks
+    {
+      key: "windows",
+      label: "Windows",
+      tasks: [
+        {
+          value: "paint-hm-windows-spray",
+          label: "Paint HM windows spray",
+          meta: { showQuantity: true, quantityLabel: "Number of windows (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-hm-windows-cut-roll",
+          label: "Paint HM windows cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of windows (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-wood-windows-spray",
+          label: "Paint wood windows spray",
+          meta: { showQuantity: true, quantityLabel: "Number of windows (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-wood-windows-cut-roll",
+          label: "Paint wood windows cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of windows (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-wood-window-sills-spray",
+          label: "Paint wood window sills spray",
+          meta: { showQuantity: true, quantityLabel: "Number of sills (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-wood-window-sills-cut-roll",
+          label: "Paint wood window sills cut/roll",
+          meta: { showQuantity: true, quantityLabel: "Number of sills (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+      ],
+    },
+
+    // 6. Trim — 3 tasks
     {
       key: "trim",
       label: "Trim",
       tasks: [
         {
-          value: "prep-interior-trim",
-          label: "Prep interior trim",
-          meta: {
-            showQuantity: false,
-            showPaintGallons: false,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-          },
+          value: "prep-trim",
+          label: "Prep trim (base, case, door/window frames)",
+          meta: { showQuantity: false, showPaintGallons: false, showPrimerGallons: false, showLaborMinutes: true },
         },
         {
-          value: "paint-interior-trim",
-          label: "Paint interior trim",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Quantity (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-          },
+          value: "paint-trim-spray",
+          label: "Paint trim (base, case, door/window frames) – spray",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
         {
-          value: "handrails",
-          label: "Handrails",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Quantity (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-          },
+          value: "paint-trim-cut-roll",
+          label: "Paint trim (base, case, door/window frames) – cut/roll",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
       ],
     },
+
+    // 7. Steel — 3 tasks
     {
-      key: "stairs",
-      label: "Stairs",
+      key: "steel",
+      label: "Steel",
       tasks: [
         {
-          value: "steel-stairs",
-          label: "Steel stairs",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Quantity (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-            showStairFloors: true,
-            stairFloorsLabel: "Stair floors (if applicable)",
-          },
+          value: "paint-handrails",
+          label: "Paint handrails",
+          meta: { showQuantity: true, quantityLabel: "Number of handrails (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
-      ],
-    },
-    {
-      key: "prep",
-      label: "Prep / Ceilings",
-      tasks: [
         {
-          value: "mask-ceilings",
-          label: "Mask ceilings",
-          meta: {
-            showQuantity: true,
-            showPaintGallons: false,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-          },
+          value: "paint-steel-stairs-spray",
+          label: "Paint steel stairs spray",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true, showStairFloors: true, stairFloorsLabel: "Stair floors (if applicable)" },
+        },
+        {
+          value: "paint-steel-stairs-cut-roll",
+          label: "Paint steel stairs cut/roll",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true, showStairFloors: true, stairFloorsLabel: "Stair floors (if applicable)" },
         },
       ],
     },
   ],
+
+  // ─── EXTERIOR ───────────────────────────────────────────────────────────────
   exterior: [
+    // 1. Walls — 13 tasks
     {
-      key: "doors",
-      label: "Doors / Trim",
+      key: "walls",
+      label: "Walls",
       tasks: [
         {
-          value: "painting-door-frames",
-          label: "Painting door frames",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Number of doors (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-          },
+          value: "paint-siding-1-story",
+          label: "Paint siding 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
         {
-          value: "trim-painting",
-          label: "Trim painting",
-          meta: {
-            showQuantity: true,
-            showPaintGallons: true,
-            showPrimerGallons: false,
-          },
+          value: "paint-siding-2-story",
+          label: "Paint siding 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
         {
-          value: "paint-exterior-trim",
-          label: "Paint exterior trim",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Quantity (if applicable)",
-            showPaintGallons: true,
-            showPrimerGallons: false,
-            showLaborMinutes: true,
-          },
+          value: "paint-tilt-up-walls-spray",
+          label: "Paint tilt up walls spray",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-tilt-up-walls-cut-roll",
+          label: "Paint tilt up walls cut/roll",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-metal-siding",
+          label: "Paint metal siding",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-efis-spray-1-story",
+          label: "Paint EFIS spray 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-efis-spray-2-story",
+          label: "Paint EFIS spray 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-efis-cut-roll-1-story",
+          label: "Paint EFIS cut/roll 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-efis-cut-roll-2-story",
+          label: "Paint EFIS cut/roll 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-existing-block-walls-spray-1-story",
+          label: "Paint existing block walls spray 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-existing-block-walls-spray-2-story",
+          label: "Paint existing block walls spray 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-existing-block-walls-cut-roll-1-story",
+          label: "Paint existing block walls cut/roll 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-existing-block-walls-cut-roll-2-story",
+          label: "Paint existing block walls cut/roll 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
       ],
     },
+
+    // 2. Trim — 8 tasks
     {
-      key: "siding",
-      label: "Siding",
-      tasks: [{ value: "paint-siding", label: "Paint siding" }],
-    },
-    {
-      key: "prep",
-      label: "Prep / Masking / Caulking",
+      key: "trim",
+      label: "Trim",
       tasks: [
         {
-          value: "caulking",
-          label: "Caulking",
-          meta: {
-            showQuantity: true,
-            quantityLabel: "Number of joints (if applicable)",
-            showLaborMinutes: true,
-            showPaintGallons: false,
-            showPrimerGallons: false,
-          },
+          value: "paint-siding-trim-spray-1-story",
+          label: "Paint siding trim spray 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
         {
-          value: "masking",
-          label: "Masking",
-          meta: {
-            showQuantity: true,
-            showLaborMinutes: true,
-            showPaintGallons: false,
-            showPrimerGallons: false,
-          },
+          value: "paint-siding-trim-cut-roll-1-story",
+          label: "Paint siding trim cut/roll 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-siding-trim-spray-2-story",
+          label: "Paint siding trim spray 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-siding-trim-cut-roll-2-story",
+          label: "Paint siding trim cut/roll 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-soffit-spray-1-story",
+          label: "Paint soffit spray 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-soffit-cut-roll-1-story",
+          label: "Paint soffit cut/roll 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-soffit-spray-2-story",
+          label: "Paint soffit spray 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-soffit-cut-roll-2-story",
+          label: "Paint soffit cut/roll 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+      ],
+    },
+
+    // 3. Siloxane — 2 tasks
+    {
+      key: "siloxane",
+      label: "Siloxane",
+      tasks: [
+        {
+          value: "apply-siloxane-1-story",
+          label: "Apply Siloxane 1 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "apply-siloxane-2-story",
+          label: "Apply Siloxane 2 story",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+      ],
+    },
+
+    // 4. Steel — 5 tasks
+    {
+      key: "steel",
+      label: "Steel",
+      tasks: [
+        {
+          value: "ext-paint-handrail",
+          label: "Paint handrail",
+          meta: { showQuantity: true, quantityLabel: "Number of handrails (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "ext-paint-steel-stairs-spray",
+          label: "Paint steel stairs spray",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true, showStairFloors: true, stairFloorsLabel: "Stair floors (if applicable)" },
+        },
+        {
+          value: "ext-paint-steel-stairs-cut-roll",
+          label: "Paint steel stairs cut/roll",
+          meta: { showQuantity: false, showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true, showStairFloors: true, stairFloorsLabel: "Stair floors (if applicable)" },
+        },
+        {
+          value: "paint-bollards",
+          label: "Paint bollards",
+          meta: { showQuantity: true, quantityLabel: "Number of bollards (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
+        },
+        {
+          value: "paint-steel-awnings",
+          label: "Paint steel awnings",
+          meta: { showQuantity: true, quantityLabel: "Number of awnings (if applicable)", showPaintGallons: true, showPrimerGallons: false, showLaborMinutes: true },
         },
       ],
     },
