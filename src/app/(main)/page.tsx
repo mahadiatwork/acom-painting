@@ -11,6 +11,7 @@ import { useWeeklyHours } from "@/hooks/useWeeklyHours";
 import { createClient } from "@/lib/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { useSelectedForeman } from "@/contexts/SelectedForemanContext";
+import { ForemanIndicatorBar } from "./ForemanIndicatorBar";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -80,6 +81,7 @@ export default function Dashboard() {
   return (
     <>
       <Header onLogout={handleLogout} logoutLoading={loggingOut} />
+      <ForemanIndicatorBar />
 
       <main className="flex-1 w-full px-4 py-5 space-y-6 overflow-y-auto pb-32">
 
