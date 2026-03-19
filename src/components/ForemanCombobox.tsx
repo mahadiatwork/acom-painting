@@ -82,9 +82,11 @@ export function ForemanCombobox({
           {loading ? (
             <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading foremen...</span>
           ) : value ? (
-            <span className="flex items-center gap-2 truncate">
-              <User className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate">{value.name || value.email}</span>
+            <span className="flex min-w-0 items-center gap-3 truncate">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                {(value.name || value.email || "F").slice(0, 2).toUpperCase()}
+              </span>
+              <span className="truncate text-sm font-semibold text-slate-800">{value.name || value.email}</span>
             </span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>

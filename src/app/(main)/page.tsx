@@ -81,24 +81,12 @@ export default function Dashboard() {
     <>
       <Header onLogout={handleLogout} logoutLoading={loggingOut} />
 
-      <main className="flex-1 w-full px-4 py-6 space-y-6 overflow-y-auto pb-32">
-        <section className="app-soft-card p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Managing Crew</p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-              {(foreman?.name || "CR").slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-slate-800">{foreman?.name || "No foreman selected"}</p>
-              <p className="text-sm text-slate-400">Crew context remains active until changed.</p>
-            </div>
-          </div>
-        </section>
+      <main className="flex-1 w-full px-4 py-5 space-y-6 overflow-y-auto pb-32">
 
         {/* Main Action */}
-        <section className="w-full">
+        <section className="w-full pt-1">
           <Link href="/entry/new" className="block w-full">
-            <PrimaryButton className="w-full h-18 text-lg flex items-center justify-center gap-2 rounded-[1.35rem]">
+            <PrimaryButton className="mt-4 w-full h-14 text-lg flex items-center justify-center gap-2 rounded-[1rem] shadow-md">
               <Plus size={24} strokeWidth={3} />
               New Timesheet
             </PrimaryButton>
@@ -107,15 +95,15 @@ export default function Dashboard() {
 
         {/* Quick Glance */}
         <section className="w-full grid grid-cols-1 gap-4">
-          <div className="app-dark-card w-full p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="w-full rounded-[1.25rem] bg-[linear-gradient(180deg,#384146_0%,#2f373c_100%)] text-white p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_14px_28px_rgba(15,23,42,0.14)]">
             <div className="absolute top-3 right-3 p-3 opacity-10">
               <Clock size={100} />
             </div>
-            <h3 className="text-white/70 text-sm font-medium uppercase tracking-[0.24em] mb-2">Crew Hours This Week</h3>
+            <h3 className="text-white/70 text-xs font-medium uppercase tracking-[0.22em] mb-2">Crew Hours This Week</h3>
             {isLoadingHours ? (
               <div className="h-16 w-24 bg-white/20 rounded animate-pulse"></div>
             ) : (
-              <span className="text-6xl font-bold font-heading tracking-[-0.04em]">{weeklyHours}</span>
+              <span className="text-5xl font-bold font-heading tracking-[-0.04em]">{weeklyHours}</span>
             )}
           </div>
         </section>

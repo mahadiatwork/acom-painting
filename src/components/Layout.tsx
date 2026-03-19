@@ -28,9 +28,9 @@ export function Layout({ children, className }: { children: React.ReactNode; cla
 
 export function Header({ title, user, onLogout, logoutLoading }: { title?: string, user?: string, onLogout?: () => void, logoutLoading?: boolean }) {
   return (
-    <header className="app-topbar sticky top-0 z-10 px-5 py-5 flex justify-between items-center">
+    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
       {title ? (
-        <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">{title}</h1>
       ) : (
         <div className="flex items-center">
           <Image
@@ -47,13 +47,13 @@ export function Header({ title, user, onLogout, logoutLoading }: { title?: strin
 
       {(user || onLogout) && (
         <div className="flex items-center gap-3">
-          {user && !logoutLoading && <span className="text-sm font-medium text-white/80">{user}</span>}
+          {user && !logoutLoading && <span className="text-sm font-medium text-slate-500">{user}</span>}
           {onLogout && (
             <button
               type="button"
               onClick={logoutLoading ? undefined : onLogout}
               disabled={logoutLoading}
-              className="flex items-center gap-2 rounded-full px-3 py-2 text-white/85 hover:bg-white/8 hover:text-white transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-90"
+              className="flex items-center gap-2 rounded-full px-2 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-90"
               aria-label={logoutLoading ? "Logging out" : "Log out"}
             >
               {logoutLoading ? (
