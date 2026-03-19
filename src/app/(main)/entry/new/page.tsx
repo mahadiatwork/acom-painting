@@ -2137,7 +2137,7 @@ export default function NewEntry() {
               )}
             </div>
 
-            <div className="px-4 py-3 border-t border-gray-200 flex justify-end">
+            <div className="px-4 pt-3 pb-[max(1rem,calc(5.5rem+env(safe-area-inset-bottom,0px)))] border-t border-gray-200 flex justify-end bg-white">
               <button
                 type="button"
                 onClick={() => setTmDetailsOpen(false)}
