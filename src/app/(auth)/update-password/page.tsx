@@ -68,26 +68,27 @@ export default function UpdatePassword() {
   };
 
   return (
-    <Layout className="bg-white">
-      <div className="flex flex-col min-h-screen">
-        <div className="bg-secondary py-12 px-8 flex flex-col items-center justify-center">
-          <div className="inline-flex items-center justify-center mb-6">
-            <img
-              src="/assets/acomLogo.png"
-              alt="ACOM Painting Logo"
-              width={160}
-              height={96}
-              className="h-24 w-auto"
-            />
+    <Layout className="bg-transparent">
+      <div className="flex min-h-screen items-center justify-center px-6 py-10">
+        <div className="w-full max-w-md app-soft-card px-7 py-10 md:px-8 md:py-12">
+          <div className="mb-10 flex flex-col items-center text-center">
+            <div className="mb-6 rounded-[1.5rem] bg-slate-50 px-7 py-5 shadow-inner">
+              <img
+                src="/assets/acomLogo.png"
+                alt="ACOM Painting Logo"
+                width={180}
+                height={108}
+                className="h-20 w-auto"
+              />
+            </div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Security Update</p>
+            <h2 className="app-section-title text-[2.1rem]">Update Password</h2>
+            <p className="app-subtle-text mt-3 max-w-sm">
+              For your security, set a new password before continuing to the app.
+            </p>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Update Password</h2>
-          <p className="text-gray-400 text-sm text-center">
-            For your security, please set a new password before continuing.
-          </p>
-        </div>
 
-        <div className="flex-1 p-8 pt-10 bg-white">
-          <form onSubmit={handleUpdate} className="space-y-6">
+          <form onSubmit={handleUpdate} className="space-y-5">
             <InputField
               label="New Password"
               id="new-password"
@@ -96,7 +97,6 @@ export default function UpdatePassword() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="bg-gray-50 border-gray-200 focus:bg-white"
             />
 
             <InputField
@@ -107,11 +107,10 @@ export default function UpdatePassword() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="bg-gray-50 border-gray-200 focus:bg-white"
             />
 
-            <div className="pt-4">
-              <PrimaryButton type="submit" disabled={loading} className="h-14 text-lg">
+            <div className="pt-3">
+              <PrimaryButton type="submit" disabled={loading} className="text-lg">
                 {loading ? "Updating..." : "Set Password & Login"}
               </PrimaryButton>
             </div>
@@ -121,4 +120,3 @@ export default function UpdatePassword() {
     </Layout>
   );
 }
-

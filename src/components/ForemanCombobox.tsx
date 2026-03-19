@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, User } from "lucide-react"
+import { Check, ChevronsUpDown, Loader2, User } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -74,13 +74,13 @@ export function ForemanCombobox({
           aria-expanded={open}
           className={cn(
             "justify-between font-normal",
-            standalone ? "w-full h-auto min-h-12 py-3 px-4" : "min-w-[200px]",
+            standalone ? "w-full h-auto min-h-14 py-3.5 px-4 rounded-2xl border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)]" : "min-w-[200px] rounded-2xl",
             triggerClassName
           )}
           disabled={loading}
         >
           {loading ? (
-            <span className="text-muted-foreground">Loading foremen...</span>
+            <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading foremen...</span>
           ) : value ? (
             <span className="flex items-center gap-2 truncate">
               <User className="h-4 w-4 shrink-0 text-primary" />
@@ -93,7 +93,7 @@ export function ForemanCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className={cn("w-full p-0", standalone ? "min-w-[var(--radix-popover-trigger-width)]" : "w-[var(--radix-popover-trigger-width)]")}
+        className={cn("w-full rounded-[1.25rem] border border-slate-200 bg-white p-0 shadow-[0_18px_40px_rgba(15,23,42,0.12)]", standalone ? "min-w-[var(--radix-popover-trigger-width)]" : "w-[var(--radix-popover-trigger-width)]")}
         align="start"
       >
         <Command shouldFilter={true}>

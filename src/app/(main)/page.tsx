@@ -3,24 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Layout, Header } from "@/components/Layout";
+import { Header } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Plus, Clock, CalendarDays, ChevronRight, History } from "lucide-react";
 import { useRecentEntries } from "@/hooks/useTimeEntries";
 import { useWeeklyHours } from "@/hooks/useWeeklyHours";
 import { createClient } from "@/lib/supabase/client";
 import { User } from "@supabase/supabase-js";
+import { useSelectedForeman } from "@/contexts/SelectedForemanContext";
 
 export default function Dashboard() {
   const router = useRouter();
+  const { foreman, hydrated } = useSelectedForeman();
   const { data: rawRecentEntries, isLoading: isLoadingEntries, isError: isEntriesError } = useRecentEntries(2);
   // Ensure it is always an array before the UI touches it
   const recentEntries = Array.isArray(rawRecentEntries) ? rawRecentEntries : [];
-
-  // Debug Log in Render
-  console.log('[Dashboard Render] Raw entries:', rawRecentEntries);
-  console.log('[Dashboard Render] Entries available:', recentEntries.length);
-  console.log('[Dashboard Render] Is loading:', isLoadingEntries);
 
   const { data: weeklyHours = 0, isLoading: isLoadingHours, isError: isHoursError } = useWeeklyHours();
   const [user, setUser] = useState<User | null>(null);
@@ -81,14 +78,27 @@ export default function Dashboard() {
   };
 
   return (
-    <Layout>
+    <>
       <Header onLogout={handleLogout} logoutLoading={loggingOut} />
 
-      <main className="flex-1 w-full px-4 py-6 space-y-6 overflow-y-auto pb-24">
+      <main className="flex-1 w-full px-4 py-6 space-y-6 overflow-y-auto pb-32">
+        <section className="app-soft-card p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Managing Crew</p>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+              {(foreman?.name || "CR").slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-xl font-semibold text-slate-800">{foreman?.name || "No foreman selected"}</p>
+              <p className="text-sm text-slate-400">Crew context remains active until changed.</p>
+            </div>
+          </div>
+        </section>
+
         {/* Main Action */}
         <section className="w-full">
           <Link href="/entry/new" className="block w-full">
-            <PrimaryButton className="w-full h-16 text-lg shadow-lg flex items-center justify-center gap-2">
+            <PrimaryButton className="w-full h-18 text-lg flex items-center justify-center gap-2 rounded-[1.35rem]">
               <Plus size={24} strokeWidth={3} />
               New Timesheet
             </PrimaryButton>
@@ -97,15 +107,15 @@ export default function Dashboard() {
 
         {/* Quick Glance */}
         <section className="w-full grid grid-cols-1 gap-4">
-          <div className="w-full bg-secondary text-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
+          <div className="app-dark-card w-full p-8 flex flex-col items-center justify-center relative overflow-hidden">
+            <div className="absolute top-3 right-3 p-3 opacity-10">
               <Clock size={100} />
             </div>
-            <h3 className="text-gray-300 text-sm font-medium uppercase tracking-wider mb-1">Crew Hours This Week</h3>
+            <h3 className="text-white/70 text-sm font-medium uppercase tracking-[0.24em] mb-2">Crew Hours This Week</h3>
             {isLoadingHours ? (
               <div className="h-16 w-24 bg-white/20 rounded animate-pulse"></div>
             ) : (
-              <span className="text-5xl font-bold font-heading">{weeklyHours}</span>
+              <span className="text-6xl font-bold font-heading tracking-[-0.04em]">{weeklyHours}</span>
             )}
           </div>
         </section>
@@ -134,19 +144,19 @@ export default function Dashboard() {
                 ))}
               </>
             ) : recentEntries.length === 0 ? (
-              <div className="w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm text-center text-gray-500">
+              <div className="app-flat-card w-full p-6 text-center text-gray-500">
                 No timesheets yet. Create your first timesheet!
               </div>
             ) : (
               recentEntries.map((entry) => (
-                <div 
-                  key={entry.id} 
+                <div
+                  key={entry.id}
                   onClick={() => router.push(`/entry/${entry.id}`)}
-                  className="w-full bg-white p-4 rounded-lg border border-primary/30 border-l-4 border-l-primary shadow-sm flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+                  className="app-flat-card w-full p-5 border-l-4 border-l-primary flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
                 >
                   <div>
-                    <h4 className="font-bold text-gray-800 line-clamp-1">{entry.jobName}</h4>
-                    <div className="flex items-center text-gray-500 text-xs mt-1 gap-2">
+                    <h4 className="text-lg font-semibold text-slate-800 line-clamp-1 tracking-[-0.02em]">{entry.jobName}</h4>
+                    <div className="flex items-center text-slate-500 text-xs mt-2 gap-2">
                       <span className="flex items-center gap-1"><CalendarDays size={12} /> {entry.date}</span>
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                       <span className="font-mono">{entry.totalCrewHours ?? 0} hrs</span>
@@ -173,6 +183,6 @@ export default function Dashboard() {
           </div>
         </section>
       </main>
-    </Layout>
+    </>
   );
 }

@@ -913,7 +913,6 @@ export default function NewEntry() {
       queryClient.invalidateQueries({ queryKey: ["weeklyHours"], refetchType: "active" })
       toast({ title: "Timesheet Submitted", description: "Your timesheet has been saved.", duration: 3000 })
       router.push("/")
-      router.refresh()
     } catch (e) {
       toast({
         title: "Submission Failed",

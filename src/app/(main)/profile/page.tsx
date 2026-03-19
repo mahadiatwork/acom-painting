@@ -73,8 +73,8 @@ export default function Profile() {
   if (loading) {
     return (
       <Layout>
-        <div className="bg-secondary text-white p-4 shadow-md">
-          <h1 className="text-xl font-bold tracking-wide">My Profile</h1>
+        <div className="app-topbar px-5 py-5 shadow-sm">
+          <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">My Profile</h1>
         </div>
         <main className="flex-1 p-4 pb-24 flex items-center justify-center">
           <div className="text-gray-500">Loading...</div>
@@ -85,43 +85,43 @@ export default function Profile() {
 
   return (
     <Layout>
-      <div className="bg-secondary text-white p-4 shadow-md">
-        <h1 className="text-xl font-bold tracking-wide">My Profile</h1>
+      <div className="app-topbar px-5 py-5 shadow-sm">
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">My Profile</h1>
       </div>
-      
+
       <main className="flex-1 p-4 md:p-6 xl:p-4 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-          <div className="h-24 bg-primary/20 relative">
-             <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-secondary rounded-full border-4 border-white flex items-center justify-center text-white">
-               <span className="text-2xl font-bold">{name.charAt(0).toUpperCase()}</span>
-             </div>
+        <div className="app-soft-card overflow-hidden mb-6">
+          <div className="h-28 bg-gradient-to-r from-primary/15 to-slate-100 relative">
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-secondary rounded-full border-4 border-white flex items-center justify-center text-white">
+              <span className="text-2xl font-bold">{name.charAt(0).toUpperCase()}</span>
+            </div>
           </div>
           <div className="pt-12 pb-6 px-4 text-center">
-            <h2 className="text-xl font-bold text-gray-800">{name}</h2>
-            <p className="text-gray-500 text-sm">Field Crew</p>
+            <h2 className="text-2xl font-semibold text-slate-800 tracking-[-0.02em]">{name}</h2>
+            <p className="text-slate-500 text-sm">Field Crew</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden divide-y divide-gray-100 mb-8">
+        <div className="app-soft-card overflow-hidden divide-y divide-slate-100 mb-8">
           <div className="p-4 flex items-center gap-4">
-            <Mail className="text-gray-400" size={20} />
+            <Mail className="text-slate-400" size={20} />
             <div className="flex-1">
-              <p className="text-xs text-gray-400 uppercase">Email</p>
-              <p className="text-gray-800 font-medium">{email || "Not available"}</p>
+              <p className="text-xs text-slate-400 uppercase">Email</p>
+              <p className="text-slate-800 font-medium">{email || "Not available"}</p>
             </div>
           </div>
           <div className="p-4 flex items-center gap-4">
-            <Shield className="text-gray-400" size={20} />
+            <Shield className="text-slate-400" size={20} />
             <div className="flex-1">
-              <p className="text-xs text-gray-400 uppercase">Zoho ID</p>
-              <p className="text-gray-800 font-medium">{zohoId}</p>
+              <p className="text-xs text-slate-400 uppercase">Zoho ID</p>
+              <p className="text-slate-800 font-medium">{zohoId}</p>
             </div>
           </div>
         </div>
 
-        <PrimaryButton 
-          onClick={handleLogout} 
-          variant="destructive" 
+        <PrimaryButton
+          onClick={handleLogout}
+          variant="destructive"
           className="w-full flex items-center justify-center gap-2"
         >
           <LogOut size={20} />

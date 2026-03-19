@@ -54,30 +54,28 @@ export default function Login() {
   };
 
   return (
-    <Layout className="bg-white">
-      <div className="flex flex-col min-h-screen">
-        <div className="bg-white py-20 px-8 flex flex-col items-center justify-center">
-          <div className="inline-flex items-center justify-center mb-6">
-            <img
-              src="/assets/acomLogo.png"
-              alt="ACOM Painting Logo"
-              width={200}
-              height={128}
-              className="h-32 w-auto"
-              suppressHydrationWarning
-            />
-          </div>
-          <div className="h-1 w-16 bg-primary rounded-full mb-2"></div>
-          <p className="text-gray-400 text-sm font-medium tracking-widest uppercase">Foreman Timesheet</p>
-        </div>
-
-        <div className="flex-1 p-8 pt-10 bg-white">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Sign in</h2>
-            <p className="text-gray-500">Use the shared login. After signing in you will select which foreman you are logging time for.</p>
+    <Layout className="bg-transparent">
+      <div className="flex min-h-screen items-center justify-center px-6 py-10">
+        <div className="w-full max-w-md app-soft-card px-7 py-10 md:px-8 md:py-12">
+          <div className="mb-10 flex flex-col items-center text-center">
+            <div className="mb-6 rounded-[1.75rem] bg-slate-50 px-8 py-6 shadow-inner">
+              <img
+                src="/assets/acomLogo.png"
+                alt="ACOM Painting Logo"
+                width={220}
+                height={140}
+                className="h-24 w-auto"
+                suppressHydrationWarning
+              />
+            </div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Foreman Timesheet</p>
+            <h2 className="app-section-title text-[2.25rem]">Sign in</h2>
+            <p className="app-subtle-text mt-3 max-w-sm">
+              Use the shared login to access the crew dashboard. You’ll choose which foreman you’re managing right after sign-in.
+            </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-5">
             <InputField
               label="Email"
               id="identifier"
@@ -86,7 +84,6 @@ export default function Login() {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
-              className="bg-gray-50 border-gray-200 focus:bg-white"
             />
 
             <InputField
@@ -97,27 +94,24 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="bg-gray-50 border-gray-200 focus:bg-white"
             />
 
-            <div className="pt-4">
-              <PrimaryButton type="submit" disabled={loading} className="h-14 text-lg flex items-center justify-center gap-2">
+            <div className="pt-3">
+              <PrimaryButton type="submit" disabled={loading} className="flex items-center justify-center gap-2 text-lg">
                 {loading ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                     <span>Logging in...</span>
                   </>
                 ) : (
-                  "Login"
+                  "Sign In"
                 )}
               </PrimaryButton>
             </div>
 
-            <div className="text-center mt-6">
-              <Link href="/forgot-password">
-                <span className="text-sm text-gray-400 hover:text-primary transition-colors cursor-pointer">
-                  Forgot Password?
-                </span>
+            <div className="pt-2 text-center">
+              <Link href="/forgot-password" className="text-sm font-medium text-slate-400 transition-colors hover:text-primary">
+                Forgot Password?
               </Link>
             </div>
           </form>

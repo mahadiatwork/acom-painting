@@ -35,25 +35,25 @@ export default function EntryDetail() {
   const sundrySource = entry?.sundryItems ?? entry
   const sundryItems = entry
     ? Object.entries(SUNDRY_ITEM_NAMES)
-        .map(([key, name]) => {
-          const raw = (sundrySource as Record<string, string>)?.[key]
-          const quantity = parseInt(typeof raw === "string" ? raw : "0", 10)
-          return { name, quantity, key }
-        })
-        .filter((item) => item.quantity > 0)
+      .map(([key, name]) => {
+        const raw = (sundrySource as Record<string, string>)?.[key]
+        const quantity = parseInt(typeof raw === "string" ? raw : "0", 10)
+        return { name, quantity, key }
+      })
+      .filter((item) => item.quantity > 0)
     : []
 
   if (isLoading) {
     return (
       <Layout>
-        <div className="bg-secondary text-secondary-foreground p-4 flex items-center sticky top-0 z-10 shadow-md">
-          <button onClick={() => router.back()} className="mr-4 text-gray-300 hover:text-white">
+        <div className="app-topbar px-5 py-5 flex items-center sticky top-0 z-10 shadow-sm">
+          <button onClick={() => router.back()} className="mr-4 rounded-full p-2 text-white/70 hover:bg-white/8 hover:text-white">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold tracking-wide text-white">Timesheet Details</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">Timesheet Details</h1>
         </div>
         <main className="flex-1 p-4 md:p-6 xl:p-4 overflow-y-auto pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-          <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+          <div className="app-soft-card p-8 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
             <p className="text-gray-500">Loading...</p>
           </div>
@@ -65,14 +65,14 @@ export default function EntryDetail() {
   if (!entry) {
     return (
       <Layout>
-        <div className="bg-secondary text-secondary-foreground p-4 flex items-center sticky top-0 z-10 shadow-md">
-          <button onClick={() => router.back()} className="mr-4 text-gray-300 hover:text-white">
+        <div className="app-topbar px-5 py-5 flex items-center sticky top-0 z-10 shadow-sm">
+          <button onClick={() => router.back()} className="mr-4 rounded-full p-2 text-white/70 hover:bg-white/8 hover:text-white">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold tracking-wide text-white">Timesheet Details</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">Timesheet Details</h1>
         </div>
         <main className="flex-1 p-4 md:p-6 xl:p-4 overflow-y-auto pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-          <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+          <div className="app-soft-card p-8 text-center">
             <p className="text-gray-500">Timesheet not found.</p>
             <button onClick={() => router.back()} className="mt-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
               Go Back
@@ -87,17 +87,17 @@ export default function EntryDetail() {
 
   return (
     <Layout>
-      <div className="bg-secondary text-secondary-foreground p-4 flex items-center sticky top-0 z-10 shadow-md">
-        <button onClick={() => router.back()} className="mr-4 text-gray-300 hover:text-white">
+      <div className="app-topbar px-5 py-5 flex items-center sticky top-0 z-10 shadow-sm">
+        <button onClick={() => router.back()} className="mr-4 rounded-full p-2 text-white/70 hover:bg-white/8 hover:text-white">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold tracking-wide text-white">Timesheet Details</h1>
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">Timesheet Details</h1>
       </div>
 
       <main className="flex-1 p-4 md:p-6 xl:p-4 space-y-6 overflow-y-auto pb-32 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
-        <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <section className="app-soft-card p-6">
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">{entry.jobName}</h2>
+            <h2 className="text-2xl font-semibold text-slate-800 tracking-[-0.02em]">{entry.jobName}</h2>
             {entry.synced ? (
               <div className="flex items-center text-green-600 text-xs font-bold bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
                 <CheckCircle2 size={14} className="mr-1.5" /> SYNCED
@@ -127,7 +127,7 @@ export default function EntryDetail() {
         </section>
 
         {painters.length > 0 && (
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <section className="app-soft-card p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
               <Users size={20} className="mr-2 text-primary" />
               Crew
@@ -162,14 +162,14 @@ export default function EntryDetail() {
         )}
 
         {sundryItems.length > 0 && (
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <section className="app-soft-card p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
               <Package size={20} className="mr-2 text-primary" />
               Sundries Used
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {sundryItems.map((item) => (
-                <div key={item.key} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <div key={item.key} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
                   <span className="text-gray-700 font-medium">{item.name}</span>
                   <span className="text-primary font-bold text-lg">{item.quantity}</span>
                 </div>
@@ -179,7 +179,7 @@ export default function EntryDetail() {
         )}
 
         {entry.extraHours && parseFloat(entry.extraHours) > 0 && (
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <section className="app-soft-card p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">Extra Work</h3>
             <div className="space-y-2 text-sm">
               <div>
@@ -197,7 +197,7 @@ export default function EntryDetail() {
         )}
 
         {entry.notes && (
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <section className="app-soft-card p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
               <FileText size={20} className="mr-2 text-primary" />
               Notes
@@ -206,7 +206,7 @@ export default function EntryDetail() {
           </section>
         )}
 
-        <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <section className="app-soft-card p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4">Details</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">

@@ -8,81 +8,78 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
-  
+
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
-  
+
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
-  
+
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  
+
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
-  
+
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
-  
+
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
-  
+
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
-  
+
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  
+
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
-  
+
   --font-sans: 'Inter', sans-serif;
   --font-heading: 'Montserrat', sans-serif;
-  
+
   --radius: 0.5rem;
 }
 
 :root {
-  /* ACOM Painting Teal Palette */
-  /* Primary Brand: Teal #0D9488 -> HSL(175, 84%, 32%) */
+  /* Refined ACOM palette for soft card-based mobile UI */
   --primary: 175 84% 32%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary (Headers/Dark): #2D3436 -> HSL(180, 6%, 19%) */
-  --secondary: 180 6% 19%;
+  --secondary: 210 10% 21%;
   --secondary-foreground: 0 0% 100%;
 
-  /* Backgrounds */
-  --background: 0 0% 100%; /* White */
-  --foreground: 0 0% 18%; /* Dark Gray Text */
+  --background: 210 25% 97%;
+  --foreground: 220 22% 20%;
 
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 18%;
+  --card-foreground: 220 22% 20%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 18%;
+  --popover-foreground: 220 22% 20%;
 
-  --muted: 210 40% 96%; /* Light Gray */
-  --muted-foreground: 215 16% 47%;
+  --muted: 210 24% 94%;
+  --muted-foreground: 220 11% 47%;
 
-  --accent: 175 50% 95%; /* Very light teal */
+  --accent: 177 38% 93%;
   --accent-foreground: 175 84% 25%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
+  --border: 214 26% 89%;
+  --input: 214 26% 89%;
   --ring: 175 84% 32%;
 
-  --radius: 0.5rem;
+  --radius: 1rem;
 
   /* Charts - teal inspired */
   --chart-1: 175 84% 32%;
@@ -106,7 +103,8 @@
   --primary: 31 33% 66%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 100%; /* White in dark mode */
+  --secondary: 0 0% 100%;
+  /* White in dark mode */
   --secondary-foreground: 0 0% 18%;
 
   --muted: 0 0% 25%;
@@ -127,12 +125,23 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background-image:
+      radial-gradient(circle at top, rgba(13, 148, 136, 0.05), transparent 22%),
+      linear-gradient(to bottom, #f8fafc, #f5f7fb);
   }
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading font-bold text-secondary;
   }
+
   /* Force h tags to be white in dark mode contexts if needed, 
      but relying on text-foreground usually works best.
      However, the brand guide specifies headers use the dark gray color.
@@ -141,5 +150,39 @@
   */
 }
 
+@layer components {
+  .app-screen-shell {
+    @apply min-h-screen bg-background flex justify-center;
+  }
 
+  .app-screen-frame {
+    @apply w-full max-w-md bg-transparent min-h-screen flex flex-col relative;
+  }
 
+  .app-topbar {
+    @apply bg-secondary/95 text-secondary-foreground backdrop-blur supports-[backdrop-filter]:bg-secondary/90 shadow-sm border-b border-white/5;
+  }
+
+  .app-soft-card {
+    @apply rounded-[1.5rem] bg-white border border-white/70;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  .app-flat-card {
+    @apply rounded-[1.25rem] bg-white border border-slate-200/80;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  }
+
+  .app-dark-card {
+    @apply rounded-[1.75rem] bg-secondary text-white;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.18);
+  }
+
+  .app-section-title {
+    @apply text-[2rem] leading-tight font-heading font-semibold tracking-[-0.02em] text-slate-800;
+  }
+
+  .app-subtle-text {
+    @apply text-sm leading-6 text-slate-500;
+  }
+}

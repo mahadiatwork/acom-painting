@@ -13,14 +13,14 @@ interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export function InputField({ label, id, className, error, ...props }: InputFieldProps) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="text-sm font-semibold text-gray-700">
+    <div className="space-y-2.5">
+      <Label htmlFor={id} className="text-sm font-semibold text-slate-700">
         {label}
       </Label>
       <Input
         id={id}
         className={cn(
-          "h-12 text-base bg-white border-gray-300 focus:border-primary focus:ring-primary",
+          "h-14 rounded-2xl px-4 text-base bg-white/95 border-slate-200 shadow-[0_3px_12px_rgba(15,23,42,0.04)] focus:border-primary focus:ring-2 focus:ring-primary/20 focus-visible:ring-0",
           error && "border-destructive focus:border-destructive focus:ring-destructive",
           className
         )}
@@ -38,14 +38,14 @@ interface TextAreaFieldProps extends React.TextareaHTMLAttributes<HTMLTextAreaEl
 
 export function TextAreaField({ label, id, className, error, ...props }: TextAreaFieldProps) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="text-sm font-semibold text-gray-700">
+    <div className="space-y-2.5">
+      <Label htmlFor={id} className="text-sm font-semibold text-slate-700">
         {label}
       </Label>
       <Textarea
         id={id}
         className={cn(
-          "min-h-[100px] text-base bg-white border-gray-300 focus:border-primary focus:ring-primary resize-none",
+          "min-h-[120px] rounded-2xl px-4 py-3 text-base bg-white/95 border-slate-200 shadow-[0_3px_12px_rgba(15,23,42,0.04)] focus:border-primary focus:ring-2 focus:ring-primary/20 focus-visible:ring-0 resize-none",
           error && "border-destructive focus:border-destructive focus:ring-destructive",
           className
         )}
