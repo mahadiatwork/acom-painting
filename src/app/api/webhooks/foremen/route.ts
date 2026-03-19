@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { foremen } from '@/lib/schema'
 
@@ -28,28 +29,53 @@ export async function POST(request: NextRequest) {
     const name = (payloadName ?? (email || `Foreman ${zohoId}`)).trim()
     const phoneVal = (phone ?? '').trim() || null
 
+    // We must return the Supabase row id to Zoho, but only when a row is newly created.
+    // Drizzle's onConflictDoUpdate does not reliably tell us whether an insert or update happened.
+    // So we do an explicit existence check by zoho_id.
     try {
-      await db.insert(foremen).values({
-        zohoId,
-        email,
-        name,
-        phone: phoneVal,
-      }).onConflictDoUpdate({
-        target: foremen.zohoId,
-        set: {
+      const existing = await db
+        .select({ id: foremen.id })
+        .from(foremen)
+        .where(eq(foremen.zohoId, zohoId))
+        .limit(1)
+
+      if (existing.length > 0) {
+        await db
+          .update(foremen)
+          .set({
+            email,
+            name,
+            phone: phoneVal,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(foremen.zohoId, zohoId))
+
+        console.log(`[Webhook] Updated foremen table: ${name} (Zoho ID: ${zohoId}${email ? `, ${email}` : ', no email'})`)
+        return NextResponse.json({ success: true, created: false })
+      }
+
+      const inserted = await db
+        .insert(foremen)
+        .values({
+          zohoId,
           email,
           name,
           phone: phoneVal,
-          updatedAt: new Date().toISOString(),
-        }
+        })
+        .returning({ id: foremen.id })
+
+      const supabaseId = inserted?.[0]?.id
+      console.log(`[Webhook] Created foreman row: ${name} (Supabase ID: ${supabaseId}, Zoho ID: ${zohoId}${email ? `, ${email}` : ', no email'})`)
+
+      return NextResponse.json({
+        success: true,
+        created: true,
+        supabase_id: supabaseId,
       })
-      console.log(`[Webhook] Updated foremen table: ${name} (Zoho ID: ${zohoId}${email ? `, ${email}` : ', no email'})`)
     } catch (dbError: any) {
-      console.error('[Webhook] Foremen upsert failed:', dbError?.message || dbError)
+      console.error('[Webhook] Foremen create/update failed:', dbError?.message || dbError)
       return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
     }
-
-    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[Webhook] Foremen update failed:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
