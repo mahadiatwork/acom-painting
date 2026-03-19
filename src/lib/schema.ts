@@ -51,6 +51,7 @@ export const timeEntries = pgTable("time_entries", {
   createdAt: text("created_at").default(sql`now()`),
   zohoTimeEntryId: varchar("zoho_time_entry_id"),
   totalCrewHours: text("total_crew_hours").default("0"),
+  painterAddress: text("painter_address").notNull().default(""),
   // Sundry Items (all Number type in Zoho)
   maskingPaperRoll: text("masking_paper_roll").default("0"),
   plasticRoll: text("plastic_roll").default("0"),
@@ -117,6 +118,7 @@ export const workEntries = pgTable("work_entries", {
   entryDate: date("entry_date").notNull(),
   notes: text("notes").notNull().default(""),
   changeOrder: text("change_order").notNull().default(""),
+  painterAddress: text("painter_address").notNull().default(""),
   status: text("status").notNull().default("draft"),
   tmSequence: integer("tm_sequence"),
   displayLabel: text("display_label"),

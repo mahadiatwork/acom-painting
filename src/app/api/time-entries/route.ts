@@ -78,6 +78,7 @@ const newTimesheetPayloadSchema = z.object({
     painters: z.array(painterRowSchema).min(1, 'At least one painter is required'),
   }),
   tmEntries: z.array(entryInputSchema).optional().default([]),
+  painterAddress: z.string().optional(),
 })
 
 const timesheetSchema = z.object({
@@ -112,6 +113,7 @@ type NormalizedEntry = {
 type NormalizedPayload = {
   mainEntry: NormalizedEntry
   tmEntries: NormalizedEntry[]
+  painterAddress?: string
 }
 
 function normalizePayload(payload: unknown): NormalizedPayload {
@@ -120,6 +122,7 @@ function normalizePayload(payload: unknown): NormalizedPayload {
   const newParsed = newTimesheetPayloadSchema.safeParse(payload)
   if (newParsed.success) {
     const mainDate = newParsed.data.mainEntry.date || today
+    const painterAddress = (newParsed.data.painterAddress || '').trim()
     const mainEntry: NormalizedEntry = {
       jobId: newParsed.data.mainEntry.jobId,
       jobName: newParsed.data.mainEntry.jobName,
@@ -143,7 +146,7 @@ function normalizePayload(payload: unknown): NormalizedPayload {
       painters: entry.painters || [],
     }))
 
-    return { mainEntry, tmEntries }
+    return { mainEntry, tmEntries, painterAddress: painterAddress || undefined }
   }
 
   const legacyParsed = timesheetSchema.parse(payload)
@@ -185,7 +188,7 @@ function normalizePayload(payload: unknown): NormalizedPayload {
     }
   }
 
-  return { mainEntry, tmEntries }
+  return { mainEntry, tmEntries, painterAddress: undefined }
 }
 
 function parseTimeToMinutes(time: string): number {
@@ -328,6 +331,13 @@ export async function POST(request: NextRequest) {
 
     const payload = await request.json()
     const normalized = normalizePayload(payload)
+    const jobName = normalized.mainEntry.jobName || ''
+    const isTmJob = /T\s*&\s*M/i.test(jobName)
+    const normalizedPainterAddress = (normalized.painterAddress || '').trim()
+    if (isTmJob && normalizedPainterAddress.length < 5) {
+      return NextResponse.json({ error: 'Painter address is required for T&M jobs.' }, { status: 400 })
+    }
+    const painterAddressForStorage = isTmJob ? normalizedPainterAddress : ''
 
     const mainPaintersWithHours = normalized.mainEntry.painters.map(p => {
       const totalHours = computeTotalHours(p.startTime, p.endTime, p.lunchStart || '', p.lunchEnd || '')
@@ -381,6 +391,7 @@ export async function POST(request: NextRequest) {
           notes: normalized.mainEntry.notes || '',
           changeOrder: normalized.mainEntry.changeOrder || '',
           status: 'draft',
+          painterAddress: painterAddressForStorage,
           totalCrewHours: String(mainTotalCrewHours),
           tmCount: tmComputed.length,
           tmTotalHours: String(tmTotalHours),
@@ -461,6 +472,7 @@ export async function POST(request: NextRequest) {
             tmSequence: i + 1,
             displayLabel: tm.displayLabel || `T&M Extra Work #${i + 1}`,
             totalCrewHours: String(tm.totalCrewHours),
+            painterAddress: painterAddressForStorage,
             syncState: 'pending',
           })
 
@@ -550,6 +562,7 @@ export async function POST(request: NextRequest) {
           brickTapeRoll: sundryData.brickTapeRoll || '0',
           extraHours: String(tmTotalHours),
           extraWorkDescription: tmSummaryText,
+          painterAddress: painterAddressForStorage,
         })
 
         if (mainPaintersWithHours.length > 0) {
@@ -611,6 +624,7 @@ export async function POST(request: NextRequest) {
       painters: paintersForSync,
       extraHours: String(tmTotalHours),
       extraWorkDescription: tmSummaryText,
+      painterAddress: painterAddressForStorage,
       ...sundryData,
     }
 

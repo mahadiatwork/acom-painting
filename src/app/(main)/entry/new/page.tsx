@@ -185,6 +185,7 @@ export default function NewEntry() {
   const [tmExtraWorkEnabled, setTmExtraWorkEnabled] = useState(false)
   const [tmTimeEntry, setTmTimeEntry] = useState<TimeEntrySectionState | null>(null)
   const [tmSundryItems, setTmSundryItems] = useState<SundryItem[]>([])
+  const [painterAddress, setPainterAddress] = useState("")
   // Work Performed (same draft; included in submit payload).
   // Extension: when job-level production reference is available from CRM, set jobProductionReference
   // (e.g. from job fetch) and use it to show reference values or optional defaults—without changing daily flow.
@@ -756,6 +757,11 @@ export default function NewEntry() {
       toast({ title: "Validation Error", description: "Please select a job", variant: "destructive" })
       return
     }
+    const trimmedPainterAddress = painterAddress.trim()
+    if (isTmJob && trimmedPainterAddress.length < 5) {
+      toast({ title: "Project address required", description: "Enter the project address for T&M jobs before submitting.", variant: "destructive" })
+      return
+    }
     const validPainters = customerTimeEntry.painters.filter((p) => {
       if (!p.painterId || !p.startTime || !p.endTime) return false
       const startM = parseTimeToMinutes(p.startTime)
@@ -886,7 +892,11 @@ export default function NewEntry() {
         }]
         : []
 
-      const payload = { mainEntry, tmEntries }
+      const payload = {
+        mainEntry,
+        tmEntries,
+        painterAddress: isTmJob ? trimmedPainterAddress : undefined,
+      }
       const res = await fetch("/api/time-entries", {
         method: "POST",
         headers: {
@@ -914,13 +924,17 @@ export default function NewEntry() {
     }
   }
 
+  const selectedJobName = jobId ? (projects.find((j) => j.id === jobId)?.name ?? "Selected job") : "No job selected"
+  const isTmJob = /T\s*&\s*M/i.test(selectedJobName)
+  const trimmedPainterAddressForValidation = painterAddress.trim()
   const isFormValid =
     jobId &&
     customerTimeEntry.painters.some((p) => {
       if (!p.painterId || !p.startTime || !p.endTime) return false
       return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
     }) &&
-    customerTimeEntry.painters.filter((p) => p.painterId).length === new Set(customerTimeEntry.painters.filter((p) => p.painterId).map((p) => p.painterId)).size
+    customerTimeEntry.painters.filter((p) => p.painterId).length === new Set(customerTimeEntry.painters.filter((p) => p.painterId).map((p) => p.painterId)).size &&
+    (!isTmJob || trimmedPainterAddressForValidation.length >= 5)
 
   const customerHoursTotal = customerTimeEntry.painters.reduce((sum, p) => {
     if (!p.painterId || !p.startTime || !p.endTime) return sum
@@ -930,7 +944,6 @@ export default function NewEntry() {
     if (!p.painterId || !p.startTime || !p.endTime) return sum
     return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
   }, 0)
-  const selectedJobName = jobId ? (projects.find((j) => j.id === jobId)?.name ?? "Selected job") : "No job selected"
 
   const hasTmData =
     tmExtraWorkEnabled &&
@@ -1096,6 +1109,20 @@ export default function NewEntry() {
                             <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                           </div>
                         </div>
+                        {isTmJob && (
+                          <div>
+                            <TextAreaField
+                              id="project-address"
+                              label="Project Address *"
+                              placeholder="Enter the project’s mailing address (street, city, state, zip)."
+                              value={painterAddress}
+                              onChange={(e) => setPainterAddress(e.target.value)}
+                              rows={3}
+                              required
+                              className="w-full"
+                            />
+                          </div>
+                        )}
                       </div>
                     </section>
 

@@ -36,6 +36,7 @@ export interface TimesheetData {
     changeOrder?: string
     extraHours?: string
     extraWorkDescription?: string
+    painterAddress?: string
     synced: boolean
     zohoTimeEntryId?: string
     totalCrewHours: string
@@ -328,6 +329,7 @@ async function getWorkEntriesForTimesheet(timesheetId: string) {
             jobId: workEntries.jobId,
             jobName: workEntries.jobName,
             zohoRecordId: workEntries.zohoRecordId,
+            painterAddress: workEntries.painterAddress,
         })
         .from(workEntries)
         .where(or(eq(workEntries.id, timesheetId), eq(workEntries.parentEntryId, timesheetId)))
@@ -391,6 +393,11 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanId: string
         return
     }
 
+    const normalizeAddress = (value: string | null | undefined) => (value || '').trim()
+    const jobNameForFlag = mainEntry.jobName || data.jobName || ''
+    const isTmJob = /T\s*&\s*M/i.test(jobNameForFlag)
+    const mainPainterAddress = normalizeAddress(mainEntry.painterAddress ?? data.painterAddress)
+
     let mainZohoId = mainEntry.zohoRecordId || data.zohoTimeEntryId || null
 
     if (!mainZohoId) {
@@ -412,6 +419,7 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanId: string
                 timeEntryType: 'Main',
                 totalHours: mainTotalHours,
                 sundryItems: Object.keys(legacySundry).length > 0 ? legacySundry : undefined,
+                painterAddress: isTmJob && mainPainterAddress ? mainPainterAddress : undefined,
             })
 
             if (!parent?.id) {
@@ -445,6 +453,7 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanId: string
                     .from(workEntryCrewRows)
                     .where(eq(workEntryCrewRows.workEntryId, tm.id))
                 const tmTotalHours = buildTotalHoursOnly(tmCrewRows)
+                const tmAddress = normalizeAddress(tm.painterAddress ?? mainPainterAddress ?? data.painterAddress)
                 const created = await zohoClient.createTimeEntryParent({
                     projectId: resolvedProjectId,
                     foremanId: zohoPortalUserId,
@@ -455,6 +464,7 @@ export async function syncTimesheetToZoho(data: TimesheetData, foremanId: string
                     parentTimeEntryId: mainZohoId,
                     totalHours: tmTotalHours,
                     sundryItems: Object.keys(tmSundry).length > 0 ? tmSundry : undefined,
+                    painterAddress: isTmJob && tmAddress ? tmAddress : undefined,
                 })
 
                 if (!created?.id) {
@@ -626,6 +636,7 @@ export async function retryFailedSyncs(foremanId: string): Promise<void> {
                 changeOrder: te.changeOrder ?? undefined,
                 extraHours: te.extraHours ?? undefined,
                 extraWorkDescription: te.extraWorkDescription ?? undefined,
+                painterAddress: te.painterAddress ?? undefined,
                 synced: te.synced,
                 zohoTimeEntryId: te.zohoTimeEntryId ?? undefined,
                 totalCrewHours: te.totalCrewHours ?? '0',

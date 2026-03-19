@@ -161,3 +161,90 @@ void automation.sync_foreman_to_supabase(Int recordId)
 
 - Supabase: `public.foremen` row created/updated.
 - Zoho: Foreman field `supabase_id` populated with the Supabase UUID on the **first insert only**.
+
+---
+
+# Painter Sync (Zoho ➜ Supabase)
+
+In this project, the painters webhook [`POST()`](src/app/api/webhooks/painters/route.ts:46) uses the Zoho Painter record id as the **primary key** in Supabase (it does `eq('id', id)`), so there is no separate generated UUID to store back in Zoho. The Supabase painter `id` is the same value as the Zoho painter id.
+
+The most common issue with the Deluge script is sending the payload as `parameters:` (form-encoded) instead of a JSON request body. The painters webhook reads `raw = await request.text()` and only parses it as JSON if it starts with `{`.
+
+## Final Zoho Deluge function (Painter)
+
+```deluge
+void automation.Create_painter_in_supabase(Int painterId)
+{
+	// 1) Get Painter record
+	rec = zoho.crm.getRecordById("Painters", painterId);
+	if(rec == null)
+	{
+		info "Painter record not found for id: " + painterId;
+		return;
+	}
+
+	existingSupabaseId = ifnull(rec.get("supabase_id"), "").trim();
+
+	// 2) Extract fields (Zoho keys are capitalized)
+	idStr = ifnull(rec.get("id"), "").toString().trim();
+	nameVal = ifnull(rec.get("Name"), "").toString().trim();
+	emailVal = ifnull(rec.get("Email"), "").toString().trim();
+	phoneVal = ifnull(rec.get("Phone"), "").toString().trim();
+	activeVal = rec.get("Active");
+
+	if(idStr == "" || nameVal == "")
+	{
+		info "Missing required painter fields: id and Name";
+		return;
+	}
+
+	// 3) Build JSON body as a Map (Zoho will stringify it)
+	payload = Map();
+	payload.put("id", idStr);
+	payload.put("Name", nameVal);
+	// Optional fields: send empty strings or omit; webhook converts empty to null
+	payload.put("Email", emailVal);
+	payload.put("Phone", phoneVal);
+	if(activeVal != null)
+	{
+		payload.put("Active", activeVal);
+	}
+
+	// 4) Auth
+	secret = zoho.crm.getOrgVariable("ZOHO_WEBHOOK_SECRET");
+	if(secret == null || secret.trim() == "")
+	{
+		info "ZOHO_WEBHOOK_SECRET is not set. Set it in Zoho CRM Setup > Organization Variables.";
+		return;
+	}
+	secret = secret.trim();
+
+	headers = Map();
+	headers.put("Authorization", "Bearer " + secret);
+	headers.put("Content-Type", "application/json");
+
+	url = "https://acom-painting.vercel.app/api/webhooks/painters";
+	info "Syncing Painter " + idStr + " to Supabase";
+
+	// IMPORTANT: send JSON in the BODY (not parameters)
+	jsonBody = payload.toString();
+	response = invokeurl
+	[
+		url : url
+		type : POST
+		body : jsonBody
+		headers : headers
+	];
+
+	info "Painter Sync Response: " + response;
+
+	// If supabase_id field is blank, store the painter id (Supabase uses same id)
+	if(existingSupabaseId == "" && idStr != "")
+	{
+		updateMap = Map();
+		updateMap.put("supabase_id", idStr);
+		updateResp = zoho.crm.updateRecord("Painters", painterId, updateMap);
+		info "Updated Zoho Painter supabase_id: " + updateResp;
+	}
+}
+```

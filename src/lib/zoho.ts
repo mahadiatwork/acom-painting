@@ -264,6 +264,7 @@ class ZohoClient {
     sundryItems?: Record<string, number>;
     extraHours?: number | string;
     extraWorkDescription?: string;
+    painterAddress?: string;
   }): Promise<{ id: string }> {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
@@ -316,6 +317,10 @@ class ZohoClient {
       if (data.extraWorkDescription?.trim()) {
         const extraDescField = process.env.ZOHO_TIME_ENTRY_EXTRA_DESCRIPTION_FIELD || 'Extra_Work_Description';
         zohoPayload[extraDescField] = data.extraWorkDescription.trim();
+      }
+      if (data.painterAddress?.trim()) {
+        const addressField = process.env.ZOHO_TIME_ENTRY_ADDRESS_FIELD || 'Address_Information';
+        zohoPayload[addressField] = data.painterAddress.trim();
       }
       console.log('[Zoho] Creating time entry parent:', JSON.stringify(zohoPayload, null, 2));
       const response = await axios.post(
