@@ -28,7 +28,7 @@ class ZohoClient {
         const response = await axios.get(this.accessTokenUrl);
         let token = response.data.access_token;
         if (!token && response.data.crmAPIResponse?.body?.access_token) {
-           token = response.data.crmAPIResponse.body.access_token;
+          token = response.data.crmAPIResponse.body.access_token;
         }
 
         if (token) {
@@ -51,7 +51,7 @@ class ZohoClient {
         });
 
         const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', params);
-        
+
         if (response.data.access_token) {
           this.accessToken = response.data.access_token;
           this.tokenExpiry = Date.now() + (response.data.expires_in_sec * 1000) - 60000;
@@ -80,7 +80,7 @@ class ZohoClient {
       const response = await axios.get(`${this.apiDomain}/crm/v2/Deals`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
         params: {
-            fields: 'id,Deal_Name,Stage,Closing_Date,Project_Start_Date,Shipping_Street,Single_Line_1,Single_Line_2,State,Zip_Code'
+          fields: 'id,Deal_Name,Stage,Closing_Date,Project_Start_Date,Shipping_Street,Single_Line_1,Single_Line_2,State,Zip_Code'
         }
       });
       return response.data.data;
@@ -216,20 +216,20 @@ class ZohoClient {
   private formatZohoDateTime(date: string, time: string, timezone: string): string {
     // Zoho requires format: yyyy-MM-ddTHH:mm:ss±HH:mm
     // Example: "2026-01-21T05:06:00-07:00"
-    
+
     // Ensure time is in HH:MM format (24-hour)
     // Remove any AM/PM if present and convert to 24-hour
     let normalizedTime = time.trim();
-    
+
     // If time includes AM/PM, convert to 24-hour format
     const isPM = normalizedTime.toUpperCase().includes('PM');
     const isAM = normalizedTime.toUpperCase().includes('AM');
-    
+
     if (isPM || isAM) {
       // Remove AM/PM
       normalizedTime = normalizedTime.replace(/[AaPp][Mm]/g, '').trim();
       const [hours, minutes] = normalizedTime.split(':').map(Number);
-      
+
       if (isPM && hours !== 12) {
         normalizedTime = `${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       } else if (isAM && hours === 12) {
@@ -238,13 +238,13 @@ class ZohoClient {
         normalizedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       }
     }
-    
+
     // Ensure timezone has correct format (±HH:mm)
     // timezone should already be in format like "-07:00" or "+05:30"
     const formatted = `${date}T${normalizedTime}:00${timezone}`;
-    
+
     console.log(`[Zoho] Formatting DateTime: date=${date}, time=${time} -> normalized=${normalizedTime}, timezone=${timezone}, result=${formatted}`);
-    
+
     return formatted;
   }
 
@@ -257,6 +257,10 @@ class ZohoClient {
     foremanId: string;   // Portal User ID
     date: string;        // YYYY-MM-DD
     notes?: string;
+    displayLabel?: string;
+    timeEntryType?: 'Main' | 'T&M Extra';
+    parentTimeEntryId?: string;
+    totalHours?: number | string;
     sundryItems?: Record<string, number>;
     extraHours?: number | string;
     extraWorkDescription?: string;
@@ -269,13 +273,35 @@ class ZohoClient {
       const entryName = `Timesheet - ${data.date}`;
       // Time_Entries module: job/project lookup. API name may be "Job" or "Deals" – set ZOHO_TIME_ENTRY_JOB_FIELD if Zoho returns INVALID_DATA on "Job"
       const jobField = process.env.ZOHO_TIME_ENTRY_JOB_FIELD || 'Job';
+      const timeEntryTypeField = process.env.ZOHO_TIME_ENTRY_TYPE_FIELD || 'Time_Entry_Type';
+      const parentTimeEntryField = process.env.ZOHO_TIME_ENTRY_PARENT_FIELD || 'Parent_Time_Entry';
+      const totalHoursField = process.env.ZOHO_TIME_ENTRY_TOTAL_HOURS_FIELD || 'Total_Hours';
+      const mainTypeValue = process.env.ZOHO_TIME_ENTRY_MAIN_TYPE_VALUE || 'Main';
+      const tmTypeValue = process.env.ZOHO_TIME_ENTRY_TM_TYPE_VALUE || 'T&M Extra';
+      const resolvedType = data.timeEntryType === 'T&M Extra' ? tmTypeValue : mainTypeValue;
+      console.log('[Zoho] Time_Entries field mapping:', {
+        jobField,
+        timeEntryTypeField,
+        parentTimeEntryField,
+        totalHoursField,
+        resolvedType,
+        hasParent: !!data.parentTimeEntryId,
+      });
       const zohoPayload: Record<string, any> = {
-        Name: entryName,
+        Name: data.displayLabel?.trim() || entryName,
         [jobField]: { id: data.projectId },
         Portal_User: { id: data.foremanId },
         Date: data.date,
         Time_Entry_Note: data.notes || '',
+        [timeEntryTypeField]: resolvedType,
       };
+      if (data.parentTimeEntryId) {
+        zohoPayload[parentTimeEntryField] = { id: data.parentTimeEntryId };
+      }
+      const totalHoursNum = data.totalHours != null ? Number(data.totalHours) : 0;
+      if (totalHoursNum > 0) {
+        zohoPayload[totalHoursField] = String(totalHoursNum);
+      }
       if (data.sundryItems) {
         Object.entries(data.sundryItems).forEach(([apiName, quantity]) => {
           if (quantity > 0) zohoPayload[apiName] = quantity;
@@ -332,9 +358,8 @@ class ZohoClient {
     date: string;
     startTime: string;
     endTime: string;
-    lunchStart?: string;
-    lunchEnd?: string;
     totalHours: string;
+    lunchHours?: number | string;
     timezone: string;
   }): Promise<{ id: string }> {
     try {
@@ -345,17 +370,24 @@ class ZohoClient {
       const startDateTime = this.formatZohoDateTime(data.date, data.startTime, data.timezone);
       const endDateTime = this.formatZohoDateTime(data.date, data.endTime, data.timezone);
       // Time_Entries_X_Painters: only Time_Entries + Painters (no Job). Per Zoho API names.
+      const startField = process.env.ZOHO_TE_PAINTERS_START_FIELD || 'Work_Start';
+      const endField = process.env.ZOHO_TE_PAINTERS_END_FIELD || 'Work_End';
+      const totalHoursField = process.env.ZOHO_TE_PAINTERS_TOTAL_HOURS_FIELD || 'Total_Hours';
+      const lunchHoursField = process.env.ZOHO_TE_PAINTERS_LUNCH_HOURS_FIELD || 'Lunch_Hours';
+
       const zohoPayload: Record<string, any> = {
         Time_Entries: { id: data.zohoTimeEntryId },
         Painters: { id: data.painterId },
-        Start_Time: startDateTime,
-        End_Time: endDateTime,
-        Total_Hours: data.totalHours,
+        [startField]: startDateTime,
+        [endField]: endDateTime,
+        [totalHoursField]: Number(data.totalHours),
       };
-      if (data.lunchStart && data.lunchEnd) {
-        zohoPayload.Lunch_Start = this.formatZohoDateTime(data.date, data.lunchStart, data.timezone);
-        zohoPayload.Lunch_End = this.formatZohoDateTime(data.date, data.lunchEnd, data.timezone);
+
+      const lunchHoursNum = data.lunchHours != null ? Number(data.lunchHours) : 0;
+      if (Number.isFinite(lunchHoursNum) && lunchHoursNum > 0) {
+        zohoPayload[lunchHoursField] = lunchHoursNum;
       }
+
       const moduleName = process.env.ZOHO_TE_PAINTERS_MODULE_NAME || 'Time_Entries_X_Painters';
       const response = await axios.post(
         `${this.apiDomain}/crm/v2/${moduleName}`,
@@ -380,6 +412,93 @@ class ZohoClient {
       console.error('[Zoho] API Error (createTimesheetPainterEntry):', error?.message || error);
       if (error?.response) {
         console.error('[Zoho] Junction error:', error.response.status, JSON.stringify(error.response.data, null, 2));
+      }
+      throw error;
+    }
+  }
+
+  async createWorkPerformedEntry(data: {
+    zohoTimeEntryId: string;
+    type: 'Actual' | 'T&M';
+    area: 'interior' | 'exterior';
+    groupCode: string;
+    groupLabel: string;
+    taskCode: string;
+    taskLabel: string;
+    quantity: number;
+    laborHours?: number;
+    paintGallons: number;
+    primerGallons: number;
+    primerSource: 'stock' | 'retail';
+    measurements?: {
+      count?: number | null;
+      linearFeet?: number | null;
+      stairFloors?: number | null;
+      doorCount?: number | null;
+      windowCount?: number | null;
+      handrailCount?: number | null;
+    };
+    sortOrder?: number;
+  }): Promise<{ id: string }> {
+    try {
+      if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) {
+        return { id: 'mock-work-performed-123' };
+      }
+
+      const token = await this.getAccessToken();
+      const moduleName = process.env.ZOHO_WORK_PERFORMED_MODULE_NAME || 'Work_Performed';
+      const zohoPayload: Record<string, any> = {
+        Name: data.taskLabel.substring(0, 100), // Max length for Name field typically 120
+        Time_Entry: { id: data.zohoTimeEntryId },
+        Type: data.type,
+        Area: data.area === 'interior' ? 'Interior' : 'Exterior',
+        Group_Code: data.groupCode,
+        Group_Label: data.groupLabel,
+        Task_Code: data.taskCode,
+        Task_Label: data.taskLabel,
+        Quantity: data.quantity,
+        Labor_Hours: data.laborHours ?? 0,
+        Paint_Gallons: data.paintGallons,
+        Primer_Gallons: data.primerGallons,
+        Primer_Source: data.primerSource === 'retail' ? 'Purchased' : 'Stock',
+      };
+
+      if (data.measurements?.count != null) zohoPayload.Count = data.measurements.count;
+      if (data.measurements?.linearFeet != null) zohoPayload.Linear_Feet = data.measurements.linearFeet;
+      if (data.measurements?.stairFloors != null) zohoPayload.Stair_Floors = data.measurements.stairFloors;
+      if (data.measurements?.doorCount != null) zohoPayload.Door_Count = data.measurements.doorCount;
+      if (data.measurements?.windowCount != null) zohoPayload.Window_Count = data.measurements.windowCount;
+      if (data.measurements?.handrailCount != null) zohoPayload.Handrail_Count = data.measurements.handrailCount;
+      if (data.sortOrder != null) zohoPayload.Sort_Order = data.sortOrder;
+
+      console.log('[Zoho] Creating work performed entry:', JSON.stringify(zohoPayload, null, 2));
+
+      const response = await axios.post(
+        `${this.apiDomain}/crm/v2/${moduleName}`,
+        { data: [zohoPayload] },
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+
+      const first = response.data?.data?.[0];
+      const status = (first as any)?.status;
+      const code = (first as any)?.code;
+      if (status === 'error' || code === 'INVALID_DATA' || code === 'ERROR') {
+        const msg = (first as any)?.message || 'Zoho work performed error';
+        console.error('[Zoho] Work_Performed API returned error:', JSON.stringify(response.data, null, 2));
+        throw new Error(`Zoho Work_Performed: ${msg}`);
+      }
+
+      const id = first?.id ?? (first as any)?.details?.id;
+      if (!id) {
+        console.error('[Zoho] Work_Performed response missing id:', JSON.stringify(response.data, null, 2));
+        throw new Error('Zoho did not return the created Work_Performed record id.');
+      }
+
+      return { id: String(id) };
+    } catch (error: any) {
+      console.error('[Zoho] API Error (createWorkPerformedEntry):', error?.message || error);
+      if (error?.response) {
+        console.error('[Zoho] Work_Performed error:', error.response.status, JSON.stringify(error.response.data, null, 2));
       }
       throw error;
     }

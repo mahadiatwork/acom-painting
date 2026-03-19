@@ -37,28 +37,20 @@ type TabType = "crew" | "sundry" | "work"
 const DEFAULT_START = "07:30"
 const DEFAULT_END = "16:00"
 
-// Helper: convert decimal hours (e.g., 0.5, 1, 1.5) to "H:MM" labels, e.g., "0:30", "1:00".
-const formatHoursLabel = (hours: number): string => {
-  const totalMinutes = Math.round(hours * 60)
-  const h = Math.floor(totalMinutes / 60)
-  const m = totalMinutes % 60
-  return `${h}:${String(m).padStart(2, "0")}`
-}
+const formatHoursValue = (hours: number): string => hours.toFixed(2)
 
-// Lunch duration options in 30-minute increments, displayed as H:MM.
-const LUNCH_DURATION_OPTIONS = [
-  { value: "0", label: "0:00" },
-  { value: "30", label: "0:30" },
-  { value: "60", label: "1:00" },
-  { value: "90", label: "1:30" },
-  { value: "120", label: "2:00" },
-] as const
+const formatHoursLabel = (hours: number): string => `${formatHoursValue(hours)} hrs`
 
-// Labor per task (man-hours), 0.5–40.0 hours in 0.5-hr increments, displayed as H:MM.
-// Values are stored as decimal hours (e.g., "0.5", "1", "1.5").
-const LABOR_MAN_HOUR_OPTIONS = Array.from({ length: 80 }, (_, i) => {
-  const hours = (i + 1) * 0.5 // 0.5, 1.0, 1.5, ..., 40.0
-  return { value: String(hours), label: formatHoursLabel(hours) }
+const formatHoursText = (hours: number): string => `${formatHoursValue(hours)} Hours`
+
+const LUNCH_DURATION_OPTIONS = Array.from({ length: 8 }, (_, i) => {
+  const hours = (i + 1) * 0.25
+  return { value: String(Math.round(hours * 60)), label: formatHoursLabel(hours) }
+})
+
+const LABOR_MAN_HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => {
+  const hours = i * 0.25
+  return { value: formatHoursValue(hours), label: formatHoursLabel(hours) }
 })
 
 const MINUTE_OPTIONS = ["00", "15", "30", "45"] as const
@@ -404,7 +396,7 @@ export default function NewEntry() {
                       >
                         {LUNCH_DURATION_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
-                            {opt.label} hrs
+                            {opt.label}
                           </option>
                         ))}
                       </select>
@@ -471,7 +463,7 @@ export default function NewEntry() {
     const qMeta = meta.showQuantity ?? true
     const pMeta = meta.showPaintGallons ?? true
     const prMeta = meta.showPrimerGallons ?? true
-    const lmMeta = meta.showLaborMinutes ?? false
+    const lmMeta = meta.showLaborMinutes ?? true
 
     if (qMeta) {
       const q = parseOptionalNum(workPerformedQuantity)
@@ -491,7 +483,7 @@ export default function NewEntry() {
       // Multiple tasks: labor required for each task that supports it (V1 rule).
       const countAfterSave = workPerformedEditIndex !== null ? workPerformedList.length : workPerformedList.length + 1
       if (countAfterSave >= 2 && lm.value <= 0) {
-        return "With multiple work performed tasks, labor time is required for each. Enter labor minutes."
+        return "With multiple work performed tasks, labor time is required for each. Enter labor hours."
       }
     }
     if (meta.showCount) {
@@ -787,11 +779,11 @@ export default function NewEntry() {
         const groups = WORK_PERFORMED_STRUCTURE[item.area]
         const group = groups?.find((g) => g.key === item.groupCode)
         const task = group?.tasks.find((t) => t.value === item.taskCode)
-        const showLabor = task?.meta?.showLaborMinutes ?? false
+        const showLabor = task?.meta?.showLaborMinutes ?? true
         if (showLabor && (item.laborMinutes == null || item.laborMinutes <= 0)) {
           toast({
             title: "Labor time required",
-            description: "With multiple work performed tasks, each task needs labor time. Add labor minutes to all tasks that support it.",
+            description: "With multiple work performed tasks, each task needs labor time. Add labor hours to all tasks that support it.",
             variant: "destructive",
           })
           return
@@ -996,8 +988,8 @@ export default function NewEntry() {
           <button
             onClick={() => setActiveTab("crew")}
             className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "crew"
-                ? "text-primary border-primary"
-                : "text-gray-500 border-transparent hover:text-gray-700"
+              ? "text-primary border-primary"
+              : "text-gray-500 border-transparent hover:text-gray-700"
               }`}
           >
             <span className="flex items-center justify-center gap-1.5">
@@ -1007,8 +999,8 @@ export default function NewEntry() {
           <button
             onClick={() => setActiveTab("sundry")}
             className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "sundry"
-                ? "text-primary border-primary"
-                : "text-gray-500 border-transparent hover:text-gray-700"
+              ? "text-primary border-primary"
+              : "text-gray-500 border-transparent hover:text-gray-700"
               }`}
           >
             <span className="flex items-center justify-center gap-1.5">
@@ -1018,8 +1010,8 @@ export default function NewEntry() {
           <button
             onClick={() => setActiveTab("work")}
             className={`flex-1 py-3 text-center text-sm font-semibold whitespace-nowrap transition-colors border-b-[2.5px] -mb-px ${activeTab === "work"
-                ? "text-primary border-primary"
-                : "text-gray-500 border-transparent hover:text-gray-700"
+              ? "text-primary border-primary"
+              : "text-gray-500 border-transparent hover:text-gray-700"
               }`}
           >
             <span className="flex items-center justify-center gap-1.5">
@@ -1344,7 +1336,7 @@ export default function NewEntry() {
                           meta.quantityLabel ?? "Quantity of work (if applicable)"
                         const showPaintGallons = meta.showPaintGallons ?? true
                         const showPrimerGallons = meta.showPrimerGallons ?? true
-                        const showLaborMinutes = meta.showLaborMinutes ?? false
+                        const showLaborMinutes = meta.showLaborMinutes ?? true
                         const showLinearFeet = meta.showLinearFeet ?? false
                         const linearFeetLabel = meta.linearFeetLabel ?? "Linear feet (if applicable)"
                         const showStairFloors = meta.showStairFloors ?? false
@@ -1442,8 +1434,8 @@ export default function NewEntry() {
                                     type="button"
                                     onClick={() => setWorkPerformedPrimerSource("stock")}
                                     className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "stock"
-                                        ? "bg-primary text-white"
-                                        : "text-gray-600"
+                                      ? "bg-primary text-white"
+                                      : "text-gray-600"
                                       }`}
                                   >
                                     Stock
@@ -1452,8 +1444,8 @@ export default function NewEntry() {
                                     type="button"
                                     onClick={() => setWorkPerformedPrimerSource("retail")}
                                     className={`flex-1 py-2 px-3 rounded text-xs font-semibold transition-colors ${workPerformedPrimerSource === "retail"
-                                        ? "bg-primary text-white"
-                                        : "text-gray-600"
+                                      ? "bg-primary text-white"
+                                      : "text-gray-600"
                                       }`}
                                   >
                                     Purchased
@@ -1484,7 +1476,7 @@ export default function NewEntry() {
                                   <option value="">Select hours</option>
                                   {LABOR_MAN_HOUR_OPTIONS.map((opt) => (
                                     <option key={opt.value} value={opt.value}>
-                                      {opt.label} hrs
+                                      {opt.label}
                                     </option>
                                   ))}
                                 </select>
@@ -1615,7 +1607,7 @@ export default function NewEntry() {
                               )}
                               <div><dt className="inline font-medium text-gray-500">Primer source: </dt><dd className="inline capitalize">{item.primerSource}</dd></div>
                               {item.laborMinutes > 0 && (
-                                <div><dt className="inline font-medium text-gray-500">Labor: </dt><dd className="inline">{item.laborMinutes} min</dd></div>
+                                <div><dt className="inline font-medium text-gray-500">Labor: </dt><dd className="inline">{formatHoursText(item.laborMinutes)}</dd></div>
                               )}
                               {item.measurements?.count != null && item.measurements.count > 0 && (
                                 <div><dt className="inline font-medium text-gray-500">Count: </dt><dd className="inline">{item.measurements.count}</dd></div>
@@ -1863,8 +1855,8 @@ export default function NewEntry() {
                         setTmWorkPerformedValidationError(null)
                       }}
                       className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${tmWorkPerformedArea === "interior"
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-gray-600 hover:text-gray-800"
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-800"
                         }`}
                     >
                       Interior
@@ -1883,8 +1875,8 @@ export default function NewEntry() {
                         setTmWorkPerformedValidationError(null)
                       }}
                       className={`flex-1 py-3 px-4 rounded-md text-sm font-semibold transition-colors ${tmWorkPerformedArea === "exterior"
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-gray-600 hover:text-gray-800"
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-800"
                         }`}
                     >
                       Exterior
@@ -1967,7 +1959,7 @@ export default function NewEntry() {
                         const quantityLabel = meta.quantityLabel ?? "Quantity of work (if applicable)"
                         const showPaintGallons = meta.showPaintGallons ?? true
                         const showPrimerGallons = meta.showPrimerGallons ?? true
-                        const showLaborMinutes = meta.showLaborMinutes ?? false
+                        const showLaborMinutes = meta.showLaborMinutes ?? true
                         const showLinearFeet = meta.showLinearFeet ?? false
                         const linearFeetLabel = meta.linearFeetLabel ?? "Linear feet (if applicable)"
                         const showStairFloors = meta.showStairFloors ?? false
@@ -2012,7 +2004,7 @@ export default function NewEntry() {
                                 <select value={tmWorkPerformedLaborMinutes} onChange={(e) => { setTmWorkPerformedLaborMinutes(e.target.value); setTmWorkPerformedValidationError(null) }}
                                   className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800">
                                   <option value="">Select hours</option>
-                                  {LABOR_MAN_HOUR_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label} hrs</option>)}
+                                  {LABOR_MAN_HOUR_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                 </select>
                               </div>
                             )}
@@ -2098,7 +2090,7 @@ export default function NewEntry() {
                                   {item.paintGallonsUsed > 0 && <div><dt className="inline font-medium text-gray-500">Paint: </dt><dd className="inline">{item.paintGallonsUsed} gal</dd></div>}
                                   {item.primerGallonsUsed > 0 && <div><dt className="inline font-medium text-gray-500">Primer: </dt><dd className="inline">{item.primerGallonsUsed} gal</dd></div>}
                                   <div><dt className="inline font-medium text-gray-500">Primer source: </dt><dd className="inline capitalize">{item.primerSource}</dd></div>
-                                  {item.laborMinutes > 0 && <div><dt className="inline font-medium text-gray-500">Labor: </dt><dd className="inline">{item.laborMinutes} min</dd></div>}
+                                  {item.laborMinutes > 0 && <div><dt className="inline font-medium text-gray-500">Labor: </dt><dd className="inline">{formatHoursText(item.laborMinutes)}</dd></div>}
                                   {item.measurements?.count != null && item.measurements.count > 0 && <div><dt className="inline font-medium text-gray-500">Count: </dt><dd className="inline">{item.measurements.count}</dd></div>}
                                   {item.measurements?.linearFeet != null && item.measurements.linearFeet > 0 && <div><dt className="inline font-medium text-gray-500">Linear feet: </dt><dd className="inline">{item.measurements.linearFeet}</dd></div>}
                                   {item.measurements?.stairFloors != null && item.measurements.stairFloors > 0 && <div><dt className="inline font-medium text-gray-500">Stair floors: </dt><dd className="inline">{item.measurements.stairFloors}</dd></div>}

@@ -84,7 +84,7 @@ export default function SelectForemanPage() {
       <div className="bg-secondary text-white p-4">
         <h1 className="text-lg font-bold">Select Foreman</h1>
         <p className="text-sm text-gray-300 mt-1">
-          Choose the foreman under whom you are logging time.
+          Select your name to begin entering hours for your crew.
         </p>
       </div>
 

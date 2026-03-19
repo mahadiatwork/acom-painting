@@ -18,7 +18,7 @@ export function ForemanIndicatorBar() {
   if (pathname === "/select-foreman" || !foreman) return null
 
   return (
-    <div className="bg-primary/10 border-b border-primary/20 px-3 py-2 flex items-center gap-2">
+    <div className="relative z-30 bg-primary/10 border-b border-primary/20 px-3 py-2 flex items-center gap-2">
       <span className="text-xs font-medium text-gray-700 shrink-0">Foreman:</span>
       <ForemanCombobox
         fetchForemen={fetchForemen}
