@@ -20,12 +20,12 @@ export function ForemanIndicatorBar() {
   return (
     <div className="relative z-30 border-b border-slate-200 bg-slate-50 px-4 py-4">
       <section className="space-y-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Managing Crew</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Active Submitter</p>
         <ForemanCombobox
           fetchForemen={fetchForemen}
           value={foreman}
           onSelect={setForeman}
-          placeholder="Select foreman..."
+          placeholder="Select submitter..."
           triggerClassName="h-14 w-full rounded-none border border-slate-200 bg-white px-4 text-sm text-slate-800 shadow-none"
         />
       </section>

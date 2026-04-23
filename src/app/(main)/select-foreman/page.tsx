@@ -20,8 +20,6 @@ export default function SelectForemanPage() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [loggingOut, setLoggingOut] = useState(false)
-  const [selectedForemanName, setSelectedForemanName] = useState<string | null>(null)
-  const [loadingProjects, setLoadingProjects] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -74,18 +72,11 @@ export default function SelectForemanPage() {
   }, [toast])
 
   const handleSelect = async (foreman: Foreman) => {
-    setSelectedForemanName(foreman.name || foreman.email)
-    setLoadingProjects(true)
     setForeman(foreman)
-
-    try {
-      // Warm projects endpoint so next screens feel immediate.
-      await fetch("/api/projects", { cache: "no-store" })
-    } catch (err) {
-      console.warn("[Select Foreman] Project prefetch failed:", err)
-    } finally {
-      router.replace("/")
-    }
+    // Fire project prefetch in background — do NOT await it.
+    // Navigation happens immediately; the prefetch just warms the cache.
+    fetch("/api/projects", { cache: "no-store" }).catch(() => {})
+    router.replace("/")
   }
 
   const userName = user?.user_metadata?.name || user?.email || "User"
@@ -95,8 +86,8 @@ export default function SelectForemanPage() {
       <Header user={userLoading ? "..." : userName} onLogout={handleLogout} logoutLoading={loggingOut} />
       <div className="px-6 pt-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Crew Setup</p>
-        <h1 className="app-section-title mt-3">Select a foreman to begin entering hours.</h1>
-        <p className="app-subtle-text mt-3">Choose the active crew lead. Your selection stays saved until you change it or log out.</p>
+        <h1 className="app-section-title mt-3">Who is submitting today's timesheet?</h1>
+        <p className="app-subtle-text mt-3">Select yourself or the person managing the crew today. Your selection stays saved until you change it or log out.</p>
       </div>
 
       <main className="flex-1 px-6 py-8">
@@ -114,34 +105,20 @@ export default function SelectForemanPage() {
 
         {!loading && !error && foremen.length === 0 && (
           <div className="p-4 rounded-lg bg-gray-50 text-gray-600 text-sm">
-            No foremen in list. Sync Portal Users from Zoho to Supabase (e.g. run the cron sync).
+            No submitters in list. Sync Portal Users from Zoho to Supabase (e.g. run the cron sync).
           </div>
         )}
 
         {!loading && foremen.length > 0 && (
           <div className="app-soft-card mx-auto max-w-md p-6 md:p-8">
-            {loadingProjects ? (
-              <div className="py-6">
-                <div className="flex items-center gap-3 text-primary">
-                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
-                  <p className="text-lg font-semibold">Loading dashboard...</p>
-                </div>
-                <p className="mt-3 text-base text-slate-700">
-                  Selected foreman: <span className="font-semibold">{selectedForemanName ?? "-"}</span>
-                </p>
-              </div>
-            ) : (
-              <>
-                <ForemanCombobox
-                  foremen={foremen}
-                  value={null}
-                  onSelect={handleSelect}
-                  placeholder="Search and select foreman..."
-                  standalone
-                />
-                <p className="mt-5 text-center text-sm text-slate-400">Your crew dashboard will open right after selection.</p>
-              </>
-            )}
+            <ForemanCombobox
+              foremen={foremen}
+              value={null}
+              onSelect={handleSelect}
+              placeholder="Search and select submitter..."
+              standalone
+            />
+            <p className="mt-5 text-center text-sm text-slate-400">Your crew dashboard will open right after selection.</p>
           </div>
         )}
       </main>

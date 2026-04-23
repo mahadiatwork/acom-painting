@@ -43,18 +43,63 @@ const formatHoursLabel = (hours: number): string => `${formatHoursValue(hours)} 
 
 const formatHoursText = (hours: number): string => `${formatHoursValue(hours)} Hours`
 
-const LUNCH_DURATION_OPTIONS = Array.from({ length: 8 }, (_, i) => {
-  const hours = (i + 1) * 0.25
-  return { value: String(Math.round(hours * 60)), label: formatHoursLabel(hours) }
-})
+// No Lunch is first so it's the prominent choice; then 15-min increments up to 2 hrs
+const LUNCH_DURATION_OPTIONS = [
+  { value: "0", label: "No Lunch" },
+  ...Array.from({ length: 8 }, (_, i) => {
+    const hours = (i + 1) * 0.25
+    return { value: String(Math.round(hours * 60)), label: formatHoursLabel(hours) }
+  }),
+]
 
 const LABOR_MAN_HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => {
   const hours = i * 0.25
   return { value: formatHoursValue(hours), label: formatHoursLabel(hours) }
 })
 
+// Single scrollable time list: 12:00 AM → 11:45 PM in 15-min steps (96 slots).
+// This eliminates the AM/PM confusion from separate hour/minute/period pickers.
+const TIME_SLOTS: { value: string; label: string }[] = Array.from({ length: 96 }, (_, i) => {
+  const totalMinutes = i * 15
+  const h24 = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  const value = `${String(h24).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+  const period = h24 < 12 ? "AM" : "PM"
+  const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24
+  const label = `${h12}:${String(m).padStart(2, "0")} ${period}`
+  return { value, label }
+})
+
+/** Convert HH:MM to nearest TIME_SLOTS value */
+function snapToSlot(time: string): string {
+  if (!time) return DEFAULT_START
+  const [h, m] = time.split(":").map(Number)
+  const total = (h ?? 0) * 60 + (m ?? 0)
+  const snapped = Math.round(total / 15) * 15
+  const clipped = Math.min(snapped, 95 * 15) // max 11:45 PM
+  const sh = Math.floor(clipped / 60)
+  const sm = clipped % 60
+  return `${String(sh).padStart(2, "0")}:${String(sm).padStart(2, "0")}`
+}
+
 const MINUTE_OPTIONS = ["00", "15", "30", "45"] as const
-const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 4) // 4 AM–9 PM
+const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 4) // kept for reference
+
+/** Inline drop-down time picker built from TIME_SLOTS. Replaces the native time input to avoid AM/PM confusion. */
+function TimePicker({ value, onChange, defaultValue }: { value: string; onChange: (v: string) => void; defaultValue: string }) {
+  const slotValue = snapToSlot(value || defaultValue)
+  return (
+    <select
+      className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+      value={slotValue}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {TIME_SLOTS.map((s) => (
+        <option key={s.value} value={s.value}>{s.label}</option>
+      ))}
+    </select>
+  )
+}
 
 interface PainterRow {
   painterId: string
@@ -100,8 +145,8 @@ const emptyPainterRow = (): PainterRow => ({
   painterId: "",
   painterName: "",
   workHours: "",
-  startTime: "",
-  endTime: "",
+  startTime: DEFAULT_START,
+  endTime: DEFAULT_END,
   lunchDuration: "30",
 })
 
@@ -241,11 +286,23 @@ export default function NewEntry() {
     setPaintersState: React.Dispatch<React.SetStateAction<PainterRow[]>>
     hoursPrefix?: string
     cardRowClassName?: string
+    // When set, this foreman entry is prepended to the painters list so the
+    // submitter can also be selected as a working painter.
+    foremanEntry?: { id: string; name: string } | null
   }) => {
     const selectedIds = opts.paintersState.map((p) => p.painterId).filter(Boolean)
 
+    // Build the combined roster: foreman first (if provided), then painters.
+    // Deduplicate so the foreman isn't listed twice if they're already in paintersList.
+    const rosterPainters: { id: string; name: string }[] = [
+      ...(opts.foremanEntry && !paintersList.some((p) => p.id === opts.foremanEntry!.id)
+        ? [opts.foremanEntry]
+        : []),
+      ...paintersList,
+    ]
+
     const togglePainter = (painterId: string) => {
-      const p = paintersList.find((x) => x.id === painterId)
+      const p = rosterPainters.find((x) => x.id === painterId)
       if (!p) return
       const isSelected = selectedIds.includes(painterId)
       if (isSelected) {
@@ -267,7 +324,7 @@ export default function NewEntry() {
         const next = [...prev]
         next[index] = { ...next[index], [field]: value }
         if (field === "painterId") {
-          const p = paintersList.find((x) => x.id === value)
+          const p = rosterPainters.find((x) => x.id === value)
           if (p) next[index].painterName = p.name
         }
         return next
@@ -275,8 +332,8 @@ export default function NewEntry() {
     }
 
     const filteredPainters = crewSearch
-      ? paintersList.filter((p) => p.name.toLowerCase().includes(crewSearch.toLowerCase()))
-      : paintersList
+      ? rosterPainters.filter((p) => p.name.toLowerCase().includes(crewSearch.toLowerCase()))
+      : rosterPainters
 
     return (
       <section>
@@ -295,7 +352,7 @@ export default function NewEntry() {
                 No painters in list. Add painters in Zoho (they sync here) or run the seed script in Supabase. Ensure this app uses the same Supabase project (roofworx-timesheet-app).
               </div>
             )}
-            {!isPaintersError && paintersList.length > 0 && (
+            {!isPaintersError && rosterPainters.length > 0 && (
               <div className="mb-4">
                 <Label className="text-sm text-gray-600 block mb-2">{opts.crewLabel}</Label>
                 <p className="text-xs text-gray-500 mb-2">{opts.crewHelpText}</p>
@@ -369,30 +426,26 @@ export default function NewEntry() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <Label className="text-xs text-gray-500">From</Label>
-                        <input
-                          type="time"
-                          step={900}
-                          className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                        <TimePicker
                           value={row.startTime || DEFAULT_START}
-                          onChange={(e) => updateRow(index, "startTime", snapTimeTo15Minutes(e.target.value))}
+                          defaultValue={DEFAULT_START}
+                          onChange={(v) => updateRow(index, "startTime", v)}
                         />
                       </div>
                       <div>
                         <Label className="text-xs text-gray-500">To</Label>
-                        <input
-                          type="time"
-                          step={900}
-                          className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm"
+                        <TimePicker
                           value={row.endTime || DEFAULT_END}
-                          onChange={(e) => updateRow(index, "endTime", snapTimeTo15Minutes(e.target.value))}
+                          defaultValue={DEFAULT_END}
+                          onChange={(v) => updateRow(index, "endTime", v)}
                         />
                       </div>
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-500">Lunch hours</Label>
+                      <Label className="text-xs text-gray-500">Lunch break</Label>
                       <select
                         className="w-full h-10 px-2 rounded border border-gray-300 bg-white text-sm mt-0.5"
-                        value={row.lunchDuration || "0"}
+                        value={row.lunchDuration ?? "0"}
                         onChange={(e) => updateRow(index, "lunchDuration", e.target.value)}
                       >
                         {LUNCH_DURATION_OPTIONS.map((opt) => (
@@ -984,12 +1037,12 @@ export default function NewEntry() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          aria-label="Go back"
-          title="Go back"
+          aria-label="Start Over"
+          title="Start Over — return to dashboard"
           className="mr-4 text-gray-300 hover:text-white px-2 py-1 cursor-pointer flex items-center gap-1 text-sm font-medium"
         >
           <ArrowLeft size={20} />
-          <span>Back</span>
+          <span>Start Over</span>
         </button>
         <h1 className="text-lg font-bold">New Timesheet</h1>
       </div>
@@ -1127,8 +1180,8 @@ export default function NewEntry() {
 
                     {renderCrewTimeEntrySection({
                       title: "Crew",
-                      crewLabel: "Crew 1",
-                      crewHelpText: "Tap to select painters. Each person can have individual start/end times below.",
+                      crewLabel: "Submitter / Crew",
+                      crewHelpText: "Select everyone who worked today, including yourself if you were on the tools.",
                       paintersState: customerTimeEntry.painters,
                       setPaintersState: (updater) =>
                         setCustomerTimeEntry((prev) => ({
@@ -1136,6 +1189,7 @@ export default function NewEntry() {
                           painters: typeof updater === "function" ? updater(prev.painters) : updater,
                         })),
                       hoursPrefix: "Hours",
+                      foremanEntry: selectedForeman ? { id: selectedForeman.id, name: selectedForeman.name } : null,
                     })}
 
                     <section>
@@ -1782,8 +1836,8 @@ export default function NewEntry() {
                 <>
                   {renderCrewTimeEntrySection({
                     title: "T&M Crew",
-                    crewLabel: "T&M Crew",
-                    crewHelpText: "Select painters for T&M work. These hours are tracked separately from the main timesheet.",
+                    crewLabel: "Submitter / Crew (T&M)",
+                    crewHelpText: "Select everyone on the T&M task, including yourself if you were working.",
                     paintersState: tmTimeEntry.painters,
                     setPaintersState: (updater) =>
                       setTmTimeEntry((prev) => {
@@ -1795,6 +1849,7 @@ export default function NewEntry() {
                       }),
                     hoursPrefix: "T&M hours",
                     cardRowClassName: "p-4 rounded-lg border border-gray-200 bg-gray-50/50 space-y-3",
+                    foremanEntry: selectedForeman ? { id: selectedForeman.id, name: selectedForeman.name } : null,
                   })}
 
                   <TextAreaField

@@ -68,10 +68,10 @@ export default function Login() {
                 suppressHydrationWarning
               />
             </div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Foreman Timesheet</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Crew Timesheet</p>
             <h2 className="app-section-title text-[2.25rem]">Sign in</h2>
             <p className="app-subtle-text mt-3 max-w-sm">
-              Use the shared login to access the crew dashboard. You’ll choose which foreman you’re managing right after sign-in.
+              Use the shared login to access the crew dashboard. You’ll choose the submitter (who is managing the crew) right after sign-in.
             </p>
           </div>
 

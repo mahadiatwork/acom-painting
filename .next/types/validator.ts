@@ -245,6 +245,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/test-zoho-painters/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/test-zoho-painters">> = Specific
+  const handler = {} as typeof import("../../src/app/api/test-zoho-painters/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/time-entries/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/time-entries">> = Specific
@@ -267,6 +276,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/assignments">> = Specific
   const handler = {} as typeof import("../../src/app/api/webhooks/assignments/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/webhooks/delete/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/delete">> = Specific
+  const handler = {} as typeof import("../../src/app/api/webhooks/delete/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

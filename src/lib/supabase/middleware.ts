@@ -15,6 +15,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          const FIFTEEN_DAYS_SECONDS = 15 * 24 * 60 * 60 // 1,296,000 s
           cookiesToSet.forEach(({ name, value, options }) =>
             request.cookies.set(name, value)
           )
@@ -22,7 +23,10 @@ export async function updateSession(request: NextRequest) {
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              maxAge: FIFTEEN_DAYS_SECONDS,
+            })
           )
         },
       },
@@ -68,11 +72,15 @@ export async function updateSession(request: NextRequest) {
     // Case B: Normal User
     else {
       if (isAuthPath || isUpdatePasswordPath) {
-        // Redirect to select-foreman after login so user picks which foreman they're logging for
+        // Redirect away from auth pages since user is already logged in.
+        // Go to select-foreman so the user picks their submitter first.
         const url = request.nextUrl.clone()
         url.pathname = '/select-foreman'
         return NextResponse.redirect(url)
       }
+      // Note: "/" → "/select-foreman" redirect is intentionally handled client-side
+      // by ForemanGuard, NOT here. Doing it server-side blocks navigation to the
+      // dashboard after the user selects a submitter (router.replace("/")).
     }
   }
 

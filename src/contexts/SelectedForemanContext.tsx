@@ -64,34 +64,16 @@ function writeStoredForeman(value: Foreman | null) {
 }
 
 export function SelectedForemanProvider({ children }: { children: React.ReactNode }) {
-  const [foreman, setForemanState] = useState<Foreman | null>(() => readStoredForeman())
-  const [hydrated, setHydrated] = useState<boolean>(() => typeof window !== "undefined")
-
-  useEffect(() => {
-    console.log("[SelectedForemanProvider] render state", {
-      hydrated,
-      foremanId: foreman?.id ?? null,
-      foremanName: foreman?.name ?? null,
-    })
-  }, [hydrated, foreman])
+  const [foreman, setForemanState] = useState<Foreman | null>(null)
+  const [hydrated, setHydrated] = useState<boolean>(false)
 
   useEffect(() => {
     const restored = readStoredForeman()
-    console.log("[SelectedForemanProvider] initial restore", {
-      restoredId: restored?.id ?? null,
-      restoredName: restored?.name ?? null,
-      localStorageValue: typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null,
-      sessionStorageValue: typeof window !== "undefined" ? window.sessionStorage.getItem(STORAGE_KEY) : null,
-    })
     setForemanState(restored)
     setHydrated(true)
 
     const syncFromStorage = () => {
       const restored = readStoredForeman()
-      console.log("[SelectedForemanProvider] syncFromStorage", {
-        restoredId: restored?.id ?? null,
-        restoredName: restored?.name ?? null,
-      })
       setForemanState(restored)
     }
 
@@ -116,10 +98,6 @@ export function SelectedForemanProvider({ children }: { children: React.ReactNod
   }, [])
 
   const setForeman = useCallback((value: Foreman | null) => {
-    console.log("[SelectedForemanProvider] setForeman", {
-      nextId: value?.id ?? null,
-      nextName: value?.name ?? null,
-    })
     setForemanState(value)
     writeStoredForeman(value)
   }, [])
