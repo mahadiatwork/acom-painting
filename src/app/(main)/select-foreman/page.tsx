@@ -86,7 +86,7 @@ export default function SelectForemanPage() {
       <Header user={userLoading ? "..." : userName} onLogout={handleLogout} logoutLoading={loggingOut} />
       <div className="px-6 pt-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Crew Setup</p>
-        <h1 className="app-section-title mt-3">Who is submitting today's timesheet?</h1>
+        <h1 className="app-section-title mt-3">Who is submitting today&apos;s timesheet?</h1>
         <p className="app-subtle-text mt-3">Select yourself or the person managing the crew today. Your selection stays saved until you change it or log out.</p>
       </div>
 

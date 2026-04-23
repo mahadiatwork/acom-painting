@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -34,18 +35,19 @@ export default function ForgotPassword() {
 
           <div className="mb-10 flex flex-col items-center text-center">
             <div className="mb-6 rounded-[1.5rem] bg-slate-50 px-7 py-5 shadow-inner">
-              <img
+              <Image
                 src="/assets/acomLogo.png"
                 alt="ACOM Painting Logo"
                 width={180}
                 height={108}
                 className="h-20 w-auto"
+                priority
               />
             </div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Account Recovery</p>
             <h2 className="app-section-title text-[2.1rem]">Forgot Password?</h2>
             <p className="app-subtle-text mt-3 max-w-sm">
-              Enter your email or username and we’ll send your password reset instructions.
+              Enter your email or username and we&apos;ll send your password reset instructions.
             </p>
           </div>
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -73,12 +74,13 @@ export default function UpdatePassword() {
         <div className="w-full max-w-md app-soft-card px-7 py-10 md:px-8 md:py-12">
           <div className="mb-10 flex flex-col items-center text-center">
             <div className="mb-6 rounded-[1.5rem] bg-slate-50 px-7 py-5 shadow-inner">
-              <img
+              <Image
                 src="/assets/acomLogo.png"
                 alt="ACOM Painting Logo"
                 width={180}
                 height={108}
                 className="h-20 w-auto"
+                priority
               />
             </div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Security Update</p>

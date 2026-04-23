@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { InputField } from "@/components/FormFields";
@@ -59,19 +60,19 @@ export default function Login() {
         <div className="w-full max-w-md app-soft-card px-7 py-10 md:px-8 md:py-12">
           <div className="mb-10 flex flex-col items-center text-center">
             <div className="mb-6 rounded-[1.75rem] bg-slate-50 px-8 py-6 shadow-inner">
-              <img
+              <Image
                 src="/assets/acomLogo.png"
                 alt="ACOM Painting Logo"
                 width={220}
                 height={140}
                 className="h-24 w-auto"
-                suppressHydrationWarning
+                priority
               />
             </div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">Crew Timesheet</p>
             <h2 className="app-section-title text-[2.25rem]">Sign in</h2>
             <p className="app-subtle-text mt-3 max-w-sm">
-              Use the shared login to access the crew dashboard. You’ll choose the submitter (who is managing the crew) right after sign-in.
+              Use the shared login to access the crew dashboard. You&apos;ll choose the submitter (who is managing the crew) right after sign-in.
             </p>
           </div>
 
