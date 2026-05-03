@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export const dynamic = 'force-dynamic'
+// Revalidate every 5 minutes — projects change rarely within a session.
+// This allows Vercel edge caching instead of a cold fetch on every request.
+export const revalidate = 300
 
 /**
  * GET /api/projects

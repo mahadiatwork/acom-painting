@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
 import { useSelectedForeman } from '@/contexts/SelectedForemanContext'
 
 export interface TimeEntryPainter {
@@ -46,7 +45,7 @@ export interface TimeEntry {
 }
 
 interface UseTimeEntriesOptions {
-  days?: number // Number of days back to fetch (default: 30)
+  days?: number
 }
 
 export function useTimeEntries(options?: UseTimeEntriesOptions) {
@@ -55,89 +54,50 @@ export function useTimeEntries(options?: UseTimeEntriesOptions) {
 
   return useQuery<TimeEntry[]>({
     queryKey: ['time-entries', days, foreman?.id ?? null],
-    // Prevent query cancellation on unmount - let it complete
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    // Keep in cache for 5 minutes after unmount
+    gcTime: 5 * 60 * 1000,
     queryFn: async ({ signal }) => {
       if (!foreman?.id) return []
       try {
-        const response = await axios.get('/api/time-entries', {
-          params: { days },
-          timeout: 10000, // 10 second timeout - API can take 2-3 seconds
-          signal, // Pass React Query's cancellation signal to axios
+        const res = await fetch(`/api/time-entries?days=${days}`, {
+          signal,
           headers: { 'X-Selected-Foreman-Id': foreman.id },
         })
 
-        // DEBUG LOGGING
-        console.log('[useTimeEntries] Raw Axios Response:', response)
-        console.log('[useTimeEntries] Response Data:', response.data)
-        console.log('[useTimeEntries] Response Data Type:', typeof response.data)
-        console.log('[useTimeEntries] Is Array:', Array.isArray(response.data))
+        if (!res.ok) return []
 
-        // NORMALIZATION LOGIC
-        let data = response.data
+        const data = await res.json()
 
-        // 1. Handle common API wrapper patterns
-        if (data && !Array.isArray(data) && Array.isArray(data.data)) {
-          console.log('[useTimeEntries] Unwrapping data property')
-          data = data.data
-        } else if (data && !Array.isArray(data) && Array.isArray(data.entries)) {
-          console.log('[useTimeEntries] Unwrapping entries property')
-          data = data.entries
-        }
-
-        // 2. Final Safety Check
-        if (!Array.isArray(data)) {
-          console.error('[useTimeEntries] CRITICAL: Data is still not an array:', data)
-          console.error('[useTimeEntries] Data type:', typeof data)
-          console.error('[useTimeEntries] Data keys:', data && typeof data === 'object' ? Object.keys(data) : 'N/A')
-          return [] // Return empty array to prevent UI crashes
-        }
-
-        console.log('[useTimeEntries] Normalized data (array):', data.length, 'entries')
-        return data
+        // Normalise: handle { data: [...] }, { entries: [...] }, or raw array
+        if (Array.isArray(data)) return data
+        if (data && Array.isArray(data.data)) return data.data
+        if (data && Array.isArray(data.entries)) return data.entries
+        return []
       } catch (error: any) {
-        // Handle canceled requests (component unmounted)
-        if (axios.isCancel(error) || error?.code === 'ERR_CANCELED' || signal?.aborted) {
-          console.warn('[useTimeEntries] Request was canceled (component unmounted)')
-          return [] // Return empty array, but don't treat as error
-        }
-        
-        // On any other error (timeout, network, etc.), return empty array
-        console.warn('[useTimeEntries] API error, returning empty array:', error?.message || error)
+        // Ignore AbortError — component unmounted or query was cancelled
+        if (error?.name === 'AbortError' || signal?.aborted) return []
         return []
       }
     },
     // Keep data fresh for 1 minute (entries change frequently)
     staleTime: 60 * 1000,
-    refetchOnMount: true, // Always refetch when component mounts
-    // Retry once if request fails (network issues, etc.)
+    refetchOnMount: true,
     retry: 1,
     retryDelay: 1000,
-    // Return empty array on error instead of throwing
     throwOnError: false,
-    // Don't refetch on window focus if we have data (even if empty)
     refetchOnWindowFocus: false,
-    // Keep query active even if component unmounts (for background completion)
     refetchOnReconnect: true,
   })
 }
 
 /**
- * Hook to get recent entries (last N entries)
- * Uses 7 days to fetch recent entries from Postgres
+ * Recent entries: last N timesheets from the past 7 days.
  */
 export function useRecentEntries(limit: number = 5) {
   const { data: rawEntries, ...rest } = useTimeEntries({ days: 7 })
-
-  // Ensure it is always an array before slicing
   const entries = Array.isArray(rawEntries) ? rawEntries : []
-  
-  console.log('[useRecentEntries] Raw entries:', rawEntries)
-  console.log('[useRecentEntries] Normalized entries:', entries.length)
-
   return {
     ...rest,
     data: entries.slice(0, limit),
   }
 }
-

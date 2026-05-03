@@ -5,17 +5,19 @@ import { useState } from 'react'
 import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SelectedForemanProvider } from '@/contexts/SelectedForemanContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { NavigationLoadingProvider } from '@/contexts/NavigationLoadingContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // Create QueryClient instance once per app lifecycle
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            refetchOnWindowFocus: true,
-            staleTime: 60 * 1000, // 1 minute default
-            gcTime: 5 * 60 * 1000, // 5 minutes cache time
+            // Prevent unnecessary refetches when the user switches tabs
+            refetchOnWindowFocus: false,
+            staleTime: 2 * 60 * 1000,    // 2-minute default stale time
+            gcTime: 10 * 60 * 1000,      // 10-minute garbage-collection window
             retry: 1,
           },
           mutations: {
@@ -26,16 +28,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SelectedForemanProvider>
-        <TooltipProvider>
-          <Toaster />
-          {children}
-        </TooltipProvider>
-      </SelectedForemanProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <SelectedForemanProvider>
+          <NavigationLoadingProvider>
+            <TooltipProvider>
+              <Toaster />
+              {children}
+            </TooltipProvider>
+          </NavigationLoadingProvider>
+        </SelectedForemanProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
-
-
-

@@ -231,6 +231,9 @@ const SELECTED_FOREMAN_HEADER = 'x-selected-foreman-id'
  * GET /api/time-entries
  * Returns the selected foreman's timesheets with nested painters.
  * Requires X-Selected-Foreman-Id header (foremen.id from Postgres).
+ *
+ * Performance: uses 2 queries total (entries + all painters via IN clause)
+ * instead of the previous N+1 pattern (1 per timesheet for painters).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -252,6 +255,7 @@ export async function GET(request: NextRequest) {
     cutoffDate.setUTCHours(0, 0, 0, 0)
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0]
 
+    // Query 1: fetch all matching timesheets
     const rows = await db
       .select()
       .from(timeEntries)
@@ -261,12 +265,29 @@ export async function GET(request: NextRequest) {
       ))
       .orderBy(desc(timeEntries.date))
 
-    const entries: any[] = []
-    for (const te of rows) {
-      const painterRows = await db
-        .select()
-        .from(timesheetPainters)
-        .where(eq(timesheetPainters.timesheetId, te.id))
+    if (rows.length === 0) {
+      return NextResponse.json([])
+    }
+
+    // Query 2: fetch ALL painters for all timesheets in a single IN query
+    // Previously this was N queries inside a loop (N+1 anti-pattern).
+    const entryIds = rows.map(r => r.id)
+    const allPainters = await db
+      .select()
+      .from(timesheetPainters)
+      .where(sql`${timesheetPainters.timesheetId} IN (${sql.join(entryIds.map(id => sql`${id}`), sql`, `)})`)
+
+    // Group painters by timesheet ID in memory (O(n) map lookup)
+    const paintersByTimesheet = new Map<string, typeof allPainters>()
+    for (const p of allPainters) {
+      const arr = paintersByTimesheet.get(p.timesheetId) ?? []
+      arr.push(p)
+      paintersByTimesheet.set(p.timesheetId, arr)
+    }
+
+    // Assemble the response
+    const entries = rows.map(te => {
+      const painterRows = paintersByTimesheet.get(te.id) ?? []
       const painters = painterRows.map(p => ({
         id: p.id,
         painterId: p.painterId,
@@ -294,15 +315,15 @@ export async function GET(request: NextRequest) {
         masks: te.masks ?? '0',
         brickTapeRoll: te.brickTapeRoll ?? '0',
       }
-      entries.push({
+      return {
         ...te,
         totalCrewHours: parseFloat(te.totalCrewHours ?? '0'),
         extraHours: te.extraHours ?? '0',
         extraWorkDescription: te.extraWorkDescription ?? '',
         painters,
         sundryItems: sundry,
-      })
-    }
+      }
+    })
 
     return NextResponse.json(entries)
   } catch (error) {

@@ -31,8 +31,8 @@ export function useProjects() {
         return []
       }
     },
-    // Keep data fresh for 5 minutes, cache for 1 hour
-    staleTime: 5 * 60 * 1000,
+    // Projects are stable reference data — keep fresh for 15 min, cache for 1 hour
+    staleTime: 15 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     // Don't retry - fail fast and show "no data"
     retry: 0,

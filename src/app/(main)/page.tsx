@@ -1,81 +1,53 @@
 "use client"
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Header } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Plus, Clock, CalendarDays, ChevronRight, History } from "lucide-react";
 import { useRecentEntries } from "@/hooks/useTimeEntries";
 import { useWeeklyHours } from "@/hooks/useWeeklyHours";
 import { createClient } from "@/lib/supabase/client";
-import { User } from "@supabase/supabase-js";
 import { useSelectedForeman } from "@/contexts/SelectedForemanContext";
 import { ForemanIndicatorBar } from "./ForemanIndicatorBar";
+import { useNavigationLoading } from "@/contexts/NavigationLoadingContext";
 
 export default function Dashboard() {
   const router = useRouter();
+  const { startLoading } = useNavigationLoading();
   const { foreman, hydrated } = useSelectedForeman();
   const { data: rawRecentEntries, isLoading: isLoadingEntries, isError: isEntriesError } = useRecentEntries(2);
-  // Ensure it is always an array before the UI touches it
   const recentEntries = Array.isArray(rawRecentEntries) ? rawRecentEntries : [];
-
   const { data: weeklyHours = 0, isLoading: isLoadingHours, isError: isHoursError } = useWeeklyHours();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-      }
-      setLoading(false);
-    };
-
-    getInitialSession();
-
-    // Listen for auth state changes (session updates, login, logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          setUser(null);
-          // If session is lost, redirect to login
-          if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-            router.push("/login");
-          }
-        }
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
     const supabase = createClient();
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("[Logout] signOut failed:", error.message || error);
-      }
+      await supabase.auth.signOut();
     } catch (err) {
-      console.error("[Logout] unexpected error during signOut:", err);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Logout] signOut error:", err);
+      }
     } finally {
-      // In all cases, clear local user state and send the user to the login screen.
-      // This avoids leaving the app in a half-logged-out state if the network call fails.
-      setUser(null);
       window.location.replace("/login");
     }
+  };
+
+  const handleNewTimesheet = () => {
+    startLoading("New Timesheet");
+    router.push("/entry/new");
+  };
+
+  const handleViewAll = () => {
+    startLoading("All Entries");
+    router.push("/history");
+  };
+
+  const handleEntryClick = (id: string) => {
+    startLoading("Timesheet Details");
+    router.push(`/entry/${id}`);
   };
 
   return (
@@ -87,12 +59,13 @@ export default function Dashboard() {
 
         {/* Main Action */}
         <section className="w-full pt-1">
-          <Link href="/entry/new" className="block w-full">
-            <PrimaryButton className="mt-4 w-full h-14 text-lg flex items-center justify-center gap-2 rounded-[1rem] shadow-md">
-              <Plus size={24} strokeWidth={3} />
-              New Timesheet
-            </PrimaryButton>
-          </Link>
+          <PrimaryButton
+            onClick={handleNewTimesheet}
+            className="mt-4 w-full h-14 text-lg flex items-center justify-center gap-2 rounded-[1rem] shadow-md"
+          >
+            <Plus size={24} strokeWidth={3} />
+            New Timesheet
+          </PrimaryButton>
         </section>
 
         {/* Quick Glance */}
@@ -114,14 +87,17 @@ export default function Dashboard() {
         <section className="w-full">
           <div className="flex items-center justify-between mb-3 w-full">
             <h3 className="font-heading text-lg font-bold text-gray-800">Recent Timesheets</h3>
-            <Link href="/history" className="text-primary text-sm font-semibold flex items-center">
+            <button
+              type="button"
+              onClick={handleViewAll}
+              className="text-primary text-sm font-semibold flex items-center hover:opacity-80 transition-opacity"
+            >
               View All <ChevronRight size={16} />
-            </Link>
+            </button>
           </div>
 
           <div className="space-y-3 w-full">
             {isLoadingEntries ? (
-              // Skeleton loader - show for max 3 seconds
               <>
                 {[1, 2].map((i) => (
                   <div key={i} className="w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm animate-pulse">
@@ -141,7 +117,7 @@ export default function Dashboard() {
               recentEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  onClick={() => router.push(`/entry/${entry.id}`)}
+                  onClick={() => handleEntryClick(entry.id)}
                   className="app-flat-card w-full p-5 border-l-4 border-l-primary flex justify-between items-center cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
                 >
                   <div>

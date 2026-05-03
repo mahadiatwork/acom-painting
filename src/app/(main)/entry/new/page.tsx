@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Layout } from "@/components/Layout"
 import { PrimaryButton } from "@/components/PrimaryButton"
@@ -23,6 +23,7 @@ import { useSelectedForeman } from "@/contexts/SelectedForemanContext"
 import { useProjects } from "@/hooks/useProjects"
 import { usePainters } from "@/hooks/usePainters"
 import { useQueryClient } from "@tanstack/react-query"
+import { useNavigationLoading } from "@/contexts/NavigationLoadingContext"
 import {
   WORK_PERFORMED_STRUCTURE,
   type JobProductionReference,
@@ -52,10 +53,7 @@ const LUNCH_DURATION_OPTIONS = [
   }),
 ]
 
-const LABOR_MAN_HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => {
-  const hours = i * 0.25
-  return { value: formatHoursValue(hours), label: formatHoursLabel(hours) }
-})
+
 
 // Single scrollable time list: 12:00 AM → 11:45 PM in 15-min steps (96 slots).
 // This eliminates the AM/PM confusion from separate hour/minute/period pickers.
@@ -213,6 +211,7 @@ export default function NewEntry() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { foreman: selectedForeman } = useSelectedForeman()
+  const { startLoading } = useNavigationLoading()
   const [activeTab, setActiveTab] = useState<TabType>("crew")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customerWorkOpen, setCustomerWorkOpen] = useState(true)
@@ -223,7 +222,12 @@ export default function NewEntry() {
 
   // Timesheet draft state (single form; tab switching does not unmount — all state persists)
   const [jobId, setJobId] = useState("")
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0])
+  // Initialize date client-side only to avoid server/client timezone mismatch (hydration error).
+  const [date, setDate] = useState("")
+  useEffect(() => {
+    if (!date) setDate(new Date().toISOString().split("T")[0])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [notes, setNotes] = useState("")
   const [customerTimeEntry, setCustomerTimeEntry] = useState<TimeEntrySectionState>(() => ({ painters: [], notes: "" }))
   const [sundryItems, setSundryItems] = useState<SundryItem[]>([])
@@ -958,14 +962,37 @@ export default function NewEntry() {
         },
         body: JSON.stringify(payload),
       })
+      const createdData = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || "Failed to save timesheet")
+        throw new Error(createdData?.error || "Failed to save timesheet")
       }
+      const mainTotalCrewHours = validPainters.reduce((sum, p) => {
+        const { lunchStart, lunchEnd } = durationToLunchStartEnd(p.startTime, p.endTime, parseInt(p.lunchDuration, 10) || 0)
+        const lunchM = lunchStart && lunchEnd ? parseTimeToMinutes(lunchEnd) - parseTimeToMinutes(lunchStart) : 0
+        const workM = parseTimeToMinutes(p.endTime) - parseTimeToMinutes(p.startTime) - lunchM
+        return sum + (workM > 0 ? Number((workM / 60).toFixed(2)) : 0)
+      }, 0)
+      const optimisticEntry = {
+        id: createdData?.id ?? crypto.randomUUID(),
+        userId: selectedForeman?.id ?? '',
+        jobId,
+        jobName: mainEntry.jobName,
+        date,
+        totalCrewHours: mainTotalCrewHours,
+        synced: false,
+        notes,
+        painters: validPainters.map(p => ({ painterId: p.painterId, painterName: p.painterName, startTime: p.startTime, endTime: p.endTime, lunchStart: '', lunchEnd: '', totalHours: 0 })),
+        sundryItems: {},
+      }
+      queryClient.setQueriesData<unknown[]>({ queryKey: ['time-entries'] }, (old) => {
+        if (!Array.isArray(old)) return old
+        return [optimisticEntry, ...old]
+      })
       queryClient.invalidateQueries({ queryKey: ["time-entries"], refetchType: "active" })
       queryClient.invalidateQueries({ queryKey: ["weeklyHours"], refetchType: "active" })
       toast({ title: "Timesheet Submitted", description: "Your timesheet has been saved.", duration: 3000 })
-      router.push("/")
+      // Use replace so the user can't hit back and re-submit the same form
+      router.replace("/")
     } catch (e) {
       toast({
         title: "Submission Failed",
@@ -1036,7 +1063,7 @@ export default function NewEntry() {
       <div className="bg-secondary text-white p-4 flex items-center sticky top-0 z-20 shadow-md">
         <button
           type="button"
-          onClick={() => router.push("/")}
+          onClick={() => { startLoading("Dashboard"); router.push("/") }}
           aria-label="Start Over"
           title="Start Over — return to dashboard"
           className="mr-4 text-gray-300 hover:text-white px-2 py-1 cursor-pointer flex items-center gap-1 text-sm font-medium"
@@ -1545,21 +1572,27 @@ export default function NewEntry() {
                                     ? "Labor man-hours (required with multiple tasks)"
                                     : "Labor man-hours (if applicable)"}
                                 </Label>
-                                <select
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min={0}
+                                  step={0.25}
+                                  placeholder="0"
                                   value={workPerformedLaborMinutes}
                                   onChange={(e) => {
-                                    setWorkPerformedLaborMinutes(e.target.value)
+                                    const v = e.target.value
+                                    if (v === "") {
+                                      setWorkPerformedLaborMinutes("")
+                                      setWorkPerformedValidationError(null)
+                                      return
+                                    }
+                                    const n = parseFloat(v)
+                                    if (!Number.isNaN(n) && n < 0) return
+                                    setWorkPerformedLaborMinutes(v)
                                     setWorkPerformedValidationError(null)
                                   }}
                                   className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
-                                >
-                                  <option value="">Select hours</option>
-                                  {LABOR_MAN_HOUR_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </div>
                             )}
 
@@ -2082,11 +2115,27 @@ export default function NewEntry() {
                                 <Label className="text-gray-700 font-semibold mb-1 block">
                                   {(tmWorkPerformedEditIndex !== null ? tmWorkPerformedList.length >= 2 : tmWorkPerformedList.length >= 1) ? "Labor man-hours (required with multiple tasks)" : "Labor man-hours (if applicable)"}
                                 </Label>
-                                <select value={tmWorkPerformedLaborMinutes} onChange={(e) => { setTmWorkPerformedLaborMinutes(e.target.value); setTmWorkPerformedValidationError(null) }}
-                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800">
-                                  <option value="">Select hours</option>
-                                  {LABOR_MAN_HOUR_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                </select>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min={0}
+                                  step={0.25}
+                                  placeholder="0"
+                                  value={tmWorkPerformedLaborMinutes}
+                                  onChange={(e) => {
+                                    const v = e.target.value
+                                    if (v === "") {
+                                      setTmWorkPerformedLaborMinutes("")
+                                      setTmWorkPerformedValidationError(null)
+                                      return
+                                    }
+                                    const n = parseFloat(v)
+                                    if (!Number.isNaN(n) && n < 0) return
+                                    setTmWorkPerformedLaborMinutes(v)
+                                    setTmWorkPerformedValidationError(null)
+                                  }}
+                                  className="w-full h-12 px-3 rounded-md border border-gray-300 bg-white focus:ring-2 focus:ring-primary outline-none text-gray-800"
+                                />
                               </div>
                             )}
                             {showLinearFeet && (
@@ -2193,13 +2242,33 @@ export default function NewEntry() {
             </div>
 
             <div className="px-4 pt-3 pb-[max(1rem,calc(5.5rem+env(safe-area-inset-bottom,0px)))] border-t border-gray-200 flex justify-end bg-white">
-              <button
-                type="button"
-                onClick={() => setTmDetailsOpen(false)}
-                className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary/90"
-              >
-                Done
-              </button>
+              {tmActiveTab === "crew" && (
+                <button
+                  type="button"
+                  onClick={() => setTmActiveTab("sundry")}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors"
+                >
+                  Next: Sundries →
+                </button>
+              )}
+              {tmActiveTab === "sundry" && (
+                <button
+                  type="button"
+                  onClick={() => setTmActiveTab("work")}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors"
+                >
+                  Next: Work Performed →
+                </button>
+              )}
+              {tmActiveTab === "work" && (
+                <button
+                  type="button"
+                  onClick={() => setTmDetailsOpen(false)}
+                  className="inline-flex items-center px-5 py-2.5 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  Done
+                </button>
+              )}
             </div>
           </div>
         </div>

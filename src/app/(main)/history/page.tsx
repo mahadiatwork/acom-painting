@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import { CalendarDays, Clock, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import { useNavigationLoading } from "@/contexts/NavigationLoadingContext";
 
 export default function History() {
   const router = useRouter();
+  const { startLoading } = useNavigationLoading();
 
   // State for selected days filter (default to 7 days)
   const [selectedDays, setSelectedDays] = useState<7 | 30>(7);
@@ -20,7 +22,7 @@ export default function History() {
   return (
     <Layout>
       <div className="app-topbar px-5 py-5 flex items-center sticky top-0 z-10">
-        <button onClick={() => router.push("/")} className="mr-4 rounded-full p-2 text-white/70 hover:bg-white/8 hover:text-white">
+        <button onClick={() => { startLoading("Dashboard"); router.push("/"); }} className="mr-4 rounded-full p-2 text-white/70 hover:bg-white/8 hover:text-white">
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">Time History</h1>
@@ -70,7 +72,7 @@ export default function History() {
             {entries.map((entry, index) => (
               <div
                 key={entry.id}
-                onClick={() => router.push(`/entry/${entry.id}`)}
+              onClick={() => { startLoading("Timesheet Details"); router.push(`/entry/${entry.id}`); }}
                 className={`app-flat-card p-5 relative overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/50 transition-all ${index === entries.length - 1 ? 'mb-4' : ''}`}
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>

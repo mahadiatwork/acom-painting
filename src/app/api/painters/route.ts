@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export const dynamic = 'force-dynamic'
+// Revalidate every 5 minutes — painters list changes rarely.
+export const revalidate = 300
 
 /**
  * GET /api/painters

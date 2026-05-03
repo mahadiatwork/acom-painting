@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Layout } from "@/components/Layout";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { Mail, Phone, Shield, LogOut } from "lucide-react";
+import { Mail, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -29,7 +29,7 @@ export default function Profile() {
 
     // Listen for auth state changes (session updates, login, logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: import('@supabase/supabase-js').AuthChangeEvent, session: import('@supabase/supabase-js').Session | null) => {
         if (session?.user) {
           setUser(session.user);
         } else {
@@ -68,7 +68,6 @@ export default function Profile() {
 
   const name = user?.user_metadata?.name || user?.email?.split('@')[0] || "User";
   const email = user?.email || "";
-  const zohoId = user?.user_metadata?.zoho_id || "N/A";
 
   if (loading) {
     return (
@@ -89,7 +88,7 @@ export default function Profile() {
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-white">My Profile</h1>
       </div>
 
-      <main className="flex-1 p-4 md:p-6 xl:p-4 pb-24 max-w-2xl md:max-w-none xl:max-w-2xl mx-auto">
+      <main className="flex-1 pb-24 pt-6 w-[90%] mx-auto space-y-6">
         <div className="app-soft-card overflow-hidden mb-6">
           <div className="h-28 bg-gradient-to-r from-primary/15 to-slate-100 relative">
             <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-secondary rounded-full border-4 border-white flex items-center justify-center text-white">
@@ -102,19 +101,12 @@ export default function Profile() {
           </div>
         </div>
 
-        <div className="app-soft-card overflow-hidden divide-y divide-slate-100 mb-8">
+        <div className="app-soft-card overflow-hidden divide-y divide-slate-100">
           <div className="p-4 flex items-center gap-4">
             <Mail className="text-slate-400" size={20} />
             <div className="flex-1">
               <p className="text-xs text-slate-400 uppercase">Email</p>
               <p className="text-slate-800 font-medium">{email || "Not available"}</p>
-            </div>
-          </div>
-          <div className="p-4 flex items-center gap-4">
-            <Shield className="text-slate-400" size={20} />
-            <div className="flex-1">
-              <p className="text-xs text-slate-400 uppercase">Zoho ID</p>
-              <p className="text-slate-800 font-medium">{zohoId}</p>
             </div>
           </div>
         </div>

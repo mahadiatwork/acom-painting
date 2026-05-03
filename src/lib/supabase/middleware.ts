@@ -33,10 +33,17 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refreshing the auth token
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Refreshing the auth token.
+  // getUser() throws an AuthApiError when there is no valid session/refresh token
+  // (e.g. first visit, expired cookies). This is expected and handled below by
+  // redirecting to /login — suppress the error so it doesn't spam the console.
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // No session — user will be redirected to /login below.
+  }
 
   // Define paths
   const path = request.nextUrl.pathname

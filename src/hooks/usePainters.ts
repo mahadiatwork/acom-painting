@@ -19,7 +19,11 @@ export function usePainters() {
       }
       return Array.isArray(data) ? data : []
     },
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    // Painters rarely change mid-session; keep in cache for 30 min
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    throwOnError: false,
   })
 }
