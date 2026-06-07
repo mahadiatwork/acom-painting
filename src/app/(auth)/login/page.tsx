@@ -10,10 +10,12 @@ import { InputField } from "@/components/FormFields";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useSelectedForeman } from "@/contexts/SelectedForemanContext";
 
 export default function Login() {
   const router = useRouter();
   const { toast } = useToast();
+  const { clearForeman } = useSelectedForeman();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,6 +38,7 @@ export default function Login() {
       }
 
       // Show success state before navigating
+      clearForeman();
       setSuccess(true);
 
       await new Promise((resolve) => setTimeout(resolve, 1600));

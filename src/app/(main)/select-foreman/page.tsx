@@ -12,7 +12,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 export default function SelectForemanPage() {
   const router = useRouter()
-  const { foreman, setForeman, clearForeman } = useSelectedForeman()
+  const { setForeman, clearForeman } = useSelectedForeman()
   const { toast } = useToast()
   const [foremen, setForemen] = useState<Foreman[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,6 +22,12 @@ export default function SelectForemanPage() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [navigating, setNavigating] = useState(false)
   const [selectedName, setSelectedName] = useState("")
+  const [selectedSubmitter, setSelectedSubmitter] = useState<Foreman | null>(null)
+
+  useEffect(() => {
+    clearForeman()
+    setSelectedSubmitter(null)
+  }, [clearForeman])
 
   useEffect(() => {
     const supabase = createClient()
@@ -74,6 +80,7 @@ export default function SelectForemanPage() {
   }, [toast])
 
   const handleSelect = async (chosen: Foreman) => {
+    setSelectedSubmitter(chosen)
     setForeman(chosen)
     setSelectedName(chosen.name || chosen.email || "Submitter")
     setNavigating(true)
@@ -140,7 +147,7 @@ export default function SelectForemanPage() {
         <div className="px-6 pt-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Crew Setup</p>
           <h1 className="app-section-title mt-3">Who is submitting today&apos;s timesheet?</h1>
-          <p className="app-subtle-text mt-3">Select yourself or the person managing the crew today. Your selection stays saved until you change it or log out.</p>
+          <p className="app-subtle-text mt-3">Select yourself or the person managing the crew today.</p>
         </div>
 
         <main className="flex-1 px-6 py-8">
@@ -166,7 +173,7 @@ export default function SelectForemanPage() {
             <div className="app-soft-card mx-auto max-w-md p-6 md:p-8">
               <ForemanCombobox
                 foremen={foremen}
-                value={foreman}
+                value={selectedSubmitter}
                 onSelect={handleSelect}
                 placeholder="Search and select submitter..."
                 standalone
