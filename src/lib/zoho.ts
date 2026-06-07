@@ -109,13 +109,13 @@ class ZohoClient {
   /**
    * Fetch all Foremen from the Zoho CRM Foreman module (custom module).
    * Use this when foremen are stored in a dedicated Foreman module, separate from Portal Users.
-   * Env: ZOHO_FOREMAN_MODULE_NAME (default "Foremen") – API name of the Foreman module.
+   * Env: ZOHO_FOREMAN_MODULE_NAME (default "Foremans") – API name of the Foreman module.
    */
   async getForemen(): Promise<{ id: string; Name?: string; Email?: string; Phone?: string; Mobile?: string }[]> {
     try {
       if (!this.accessTokenUrl && (!this.clientId || !this.refreshToken)) return [];
       const token = await this.getAccessToken();
-      const moduleName = process.env.ZOHO_FOREMAN_MODULE_NAME || 'Foremen';
+      const moduleName = process.env.ZOHO_FOREMAN_MODULE_NAME || 'Foremans';
       const response = await axios.get(`${this.apiDomain}/crm/v2/${moduleName}`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
         params: { fields: 'id,Name,Email,Phone,Mobile' },

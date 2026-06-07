@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "check": "tsc",
+    "audit:roster": "node scripts/audit-roster.js",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },

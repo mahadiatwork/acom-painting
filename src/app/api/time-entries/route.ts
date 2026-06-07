@@ -3,8 +3,8 @@ import { waitUntil } from '@vercel/functions'
 import { createClient } from '@/lib/supabase/server'
 import { syncTimesheetToZoho, retryFailedSyncs } from '@/lib/sync-utils'
 import { db } from '@/lib/db'
-import { timeEntries, timesheetPainters, workEntries, workEntryCrewRows, workEntrySundryRows, workEntryWorkRows } from '@/lib/schema'
-import { eq, and, sql, desc } from 'drizzle-orm'
+import { foremen, painters, projects, timeEntries, timesheetPainters, workEntries, workEntryCrewRows, workEntrySundryRows, workEntryWorkRows } from '@/lib/schema'
+import { eq, and, sql, desc, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -114,6 +114,73 @@ type NormalizedPayload = {
   mainEntry: NormalizedEntry
   tmEntries: NormalizedEntry[]
   painterAddress?: string
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
+}
+
+function conflictResponse(error: string, code: string, details?: unknown) {
+  return NextResponse.json({ error, code, details }, { status: 409 })
+}
+
+async function validateReferenceData(normalized: NormalizedPayload, foremanId: string) {
+  const [foreman] = await db
+    .select({ id: foremen.id })
+    .from(foremen)
+    .where(eq(foremen.id, foremanId))
+    .limit(1)
+
+  if (!foreman) {
+    return conflictResponse(
+      'Selected foreman is no longer available. Please choose the submitter again.',
+      'STALE_FOREMAN'
+    )
+  }
+
+  const allEntries = [normalized.mainEntry, ...normalized.tmEntries]
+  const jobIds = uniqueNonEmpty(allEntries.map((entry) => entry.jobId))
+  if (jobIds.length > 0) {
+    const existingProjects = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(inArray(projects.id, jobIds))
+    const existingProjectIds = new Set(existingProjects.map((project) => project.id))
+    const missingJobIds = jobIds.filter((id) => !existingProjectIds.has(id))
+
+    if (missingJobIds.length > 0) {
+      return conflictResponse(
+        'Selected project is no longer available. Please refresh projects and choose the job again.',
+        'STALE_PROJECT',
+        { missingJobIds }
+      )
+    }
+  }
+
+  const painterIds = uniqueNonEmpty(allEntries.flatMap((entry) => entry.painters.map((p) => p.painterId)))
+  if (painterIds.length > 0) {
+    const existingPainters = await db
+      .select({ id: painters.id })
+      .from(painters)
+      .where(inArray(painters.id, painterIds))
+    const existingPainterIds = new Set(existingPainters.map((painter) => painter.id))
+    const missingPainterIds = painterIds.filter((id) => !existingPainterIds.has(id))
+
+    if (missingPainterIds.length > 0) {
+      const missingNames = allEntries
+        .flatMap((entry) => entry.painters)
+        .filter((painter) => missingPainterIds.includes(painter.painterId))
+        .map((painter) => painter.painterName || painter.painterId)
+
+      return conflictResponse(
+        'One or more selected painters are no longer available. Please refresh painters and update the crew.',
+        'STALE_PAINTER',
+        { missingPainterIds, missingNames: uniqueNonEmpty(missingNames) }
+      )
+    }
+  }
+
+  return null
 }
 
 function normalizePayload(payload: unknown): NormalizedPayload {
@@ -352,6 +419,9 @@ export async function POST(request: NextRequest) {
 
     const payload = await request.json()
     const normalized = normalizePayload(payload)
+    const referenceError = await validateReferenceData(normalized, foremanId)
+    if (referenceError) return referenceError
+
     const jobName = normalized.mainEntry.jobName || ''
     const isTmJob = /T\s*&\s*M/i.test(jobName)
     const normalizedPainterAddress = (normalized.painterAddress || '').trim()
@@ -614,6 +684,27 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           error: 'Database schema error. Run FOREMAN_MIGRATION_PHASE1.sql in Supabase.',
         }, { status: 500 })
+      }
+      const constraint = String(dbError?.constraint_name || dbError?.constraint || '')
+      if (dbError?.code === '23503' || msg.includes('violates foreign key constraint')) {
+        if (constraint.includes('foreman')) {
+          return conflictResponse(
+            'Selected foreman is no longer available. Please choose the submitter again.',
+            'STALE_FOREMAN'
+          )
+        }
+        if (constraint.includes('job') || constraint.includes('project')) {
+          return conflictResponse(
+            'Selected project is no longer available. Please refresh projects and choose the job again.',
+            'STALE_PROJECT'
+          )
+        }
+        if (constraint.includes('painter')) {
+          return conflictResponse(
+            'One or more selected painters are no longer available. Please refresh painters and update the crew.',
+            'STALE_PAINTER'
+          )
+        }
       }
       return NextResponse.json({ error: 'Failed to create timesheet', details: msg }, { status: 500 })
     }

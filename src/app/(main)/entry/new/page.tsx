@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useSelectedForeman } from "@/contexts/SelectedForemanContext"
 import { useProjects } from "@/hooks/useProjects"
-import { usePainters } from "@/hooks/usePainters"
+import { useCrew } from "@/hooks/useCrew"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigationLoading } from "@/contexts/NavigationLoadingContext"
 import {
@@ -37,6 +37,7 @@ type TabType = "crew" | "sundry" | "work"
 
 const DEFAULT_START = "07:30"
 const DEFAULT_END = "16:00"
+const DEFAULT_LUNCH_DURATION = "0"
 
 const formatHoursValue = (hours: number): string => hours.toFixed(2)
 
@@ -122,6 +123,13 @@ interface SundryItem {
 /** Work Performed list item: normalized entry from config (groupCode, taskCode, measurements). */
 type SavedWorkPerformedEntry = WorkPerformedEntry
 
+interface TmBlock {
+  id: string
+  timeEntry: TimeEntrySectionState
+  sundryItems: SundryItem[]
+  workPerformedList: SavedWorkPerformedEntry[]
+}
+
 const SUNDRY_ITEMS = [
   "Masking Paper Roll",
   "Plastic Roll",
@@ -145,7 +153,16 @@ const emptyPainterRow = (): PainterRow => ({
   workHours: "",
   startTime: DEFAULT_START,
   endTime: DEFAULT_END,
-  lunchDuration: "30",
+  lunchDuration: DEFAULT_LUNCH_DURATION,
+})
+
+const emptyTimeEntrySection = (): TimeEntrySectionState => ({ painters: [], notes: "" })
+
+const createTmBlock = (): TmBlock => ({
+  id: crypto.randomUUID(),
+  timeEntry: emptyTimeEntrySection(),
+  sundryItems: [],
+  workPerformedList: [],
 })
 
 function parseTimeToMinutes(time: string): number {
@@ -210,7 +227,7 @@ export default function NewEntry() {
   const router = useRouter()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const { foreman: selectedForeman } = useSelectedForeman()
+  const { foreman: selectedForeman, clearForeman } = useSelectedForeman()
   const { startLoading } = useNavigationLoading()
   const [activeTab, setActiveTab] = useState<TabType>("crew")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -232,7 +249,9 @@ export default function NewEntry() {
   const [customerTimeEntry, setCustomerTimeEntry] = useState<TimeEntrySectionState>(() => ({ painters: [], notes: "" }))
   const [sundryItems, setSundryItems] = useState<SundryItem[]>([])
   const [tmExtraWorkEnabled, setTmExtraWorkEnabled] = useState(false)
-  const [tmTimeEntry, setTmTimeEntry] = useState<TimeEntrySectionState | null>(null)
+  const [tmBlocks, setTmBlocks] = useState<TmBlock[]>([])
+  const [activeTmBlockId, setActiveTmBlockId] = useState<string | null>(null)
+  const [tmTimeEntry, setTmTimeEntry] = useState<TimeEntrySectionState>(() => emptyTimeEntrySection())
   const [tmSundryItems, setTmSundryItems] = useState<SundryItem[]>([])
   const [painterAddress, setPainterAddress] = useState("")
   // Work Performed (same draft; included in submit payload).
@@ -278,7 +297,8 @@ export default function NewEntry() {
   const [tmWorkPerformedValidationError, setTmWorkPerformedValidationError] = useState<string | null>(null)
 
   const { data: projects = [], isLoading: isLoadingProjects, isError: isProjectsError } = useProjects()
-  const { data: paintersList = [], isLoading: isLoadingPainters, isError: isPaintersError } = usePainters()
+  const { data: crewData, isLoading: isLoadingCrew, isError: isCrewError } = useCrew()
+  const crewList = crewData?.crew ?? []
 
   // Crew selection + time entry UI is reused across Customer work and T&M (see renderCrewTimeEntrySection).
 
@@ -290,31 +310,27 @@ export default function NewEntry() {
     setPaintersState: React.Dispatch<React.SetStateAction<PainterRow[]>>
     hoursPrefix?: string
     cardRowClassName?: string
-    // When set, this foreman entry is prepended to the painters list so the
-    // submitter can also be selected as a working painter.
-    foremanEntry?: { id: string; name: string } | null
   }) => {
     const selectedIds = opts.paintersState.map((p) => p.painterId).filter(Boolean)
 
-    // Build the combined roster: foreman first (if provided), then painters.
-    // Deduplicate so the foreman isn't listed twice if they're already in paintersList.
-    const rosterPainters: { id: string; name: string }[] = [
-      ...(opts.foremanEntry && !paintersList.some((p) => p.id === opts.foremanEntry!.id)
-        ? [opts.foremanEntry]
-        : []),
-      ...paintersList,
-    ]
-
-    const togglePainter = (painterId: string) => {
-      const p = rosterPainters.find((x) => x.id === painterId)
+    const togglePainter = (crewId: string) => {
+      const p = crewList.find((x) => x.id === crewId || x.painterId === crewId)
       if (!p) return
-      const isSelected = selectedIds.includes(painterId)
+      if (!p.syncReady || !p.painterId) {
+        toast({
+          title: "Crew member not ready",
+          description: `${p.name} needs a matching Zoho Painter record before time can be submitted.`,
+          variant: "destructive",
+        })
+        return
+      }
+      const isSelected = selectedIds.includes(p.painterId)
       if (isSelected) {
-        opts.setPaintersState((prev) => prev.filter((row) => row.painterId !== painterId))
+        opts.setPaintersState((prev) => prev.filter((row) => row.painterId !== p.painterId))
       } else {
         opts.setPaintersState((prev) => [
           ...prev,
-          { painterId: p.id, painterName: p.name, workHours: "8", startTime: DEFAULT_START, endTime: DEFAULT_END, lunchDuration: "30" },
+          { painterId: p.painterId!, painterName: p.name, workHours: "8", startTime: DEFAULT_START, endTime: DEFAULT_END, lunchDuration: DEFAULT_LUNCH_DURATION },
         ])
       }
     }
@@ -328,35 +344,35 @@ export default function NewEntry() {
         const next = [...prev]
         next[index] = { ...next[index], [field]: value }
         if (field === "painterId") {
-          const p = rosterPainters.find((x) => x.id === value)
+          const p = crewList.find((x) => x.painterId === value)
           if (p) next[index].painterName = p.name
         }
         return next
       })
     }
 
-    const filteredPainters = crewSearch
-      ? rosterPainters.filter((p) => p.name.toLowerCase().includes(crewSearch.toLowerCase()))
-      : rosterPainters
+    const filteredCrew = crewSearch
+      ? crewList.filter((p) => p.name.toLowerCase().includes(crewSearch.toLowerCase()))
+      : crewList
 
     return (
       <section>
         <h2 className="text-lg font-bold text-gray-800 mb-2">{opts.title}</h2>
-        {isLoadingPainters ? (
-          <div className="p-4 border rounded-lg bg-gray-50 text-gray-500">Loading painters...</div>
+        {isLoadingCrew ? (
+          <div className="p-4 border rounded-lg bg-gray-50 text-gray-500">Loading crew...</div>
         ) : (
           <>
-            {isPaintersError && (
+            {isCrewError && (
               <div className="p-4 mb-4 border rounded-lg bg-amber-50 border-amber-200 text-amber-800 text-sm">
-                Could not load painters. Make sure you’re logged in and try refreshing the page.
+                Could not load crew. Make sure you’re logged in and try refreshing the page.
               </div>
             )}
-            {!isPaintersError && paintersList.length === 0 && (
+            {!isCrewError && crewList.length === 0 && (
               <div className="p-4 mb-4 border rounded-lg bg-gray-50 text-gray-600 text-sm">
-                No painters in list. Add painters in Zoho (they sync here) or run the seed script in Supabase. Ensure this app uses the same Supabase project (roofworx-timesheet-app).
+                No crew in list. Add painters and working foremen in Zoho, then run the roster audit to verify they sync here.
               </div>
             )}
-            {!isPaintersError && rosterPainters.length > 0 && (
+            {!isCrewError && crewList.length > 0 && (
               <div className="mb-4">
                 <Label className="text-sm text-gray-600 block mb-2">{opts.crewLabel}</Label>
                 <p className="text-xs text-gray-500 mb-2">{opts.crewHelpText}</p>
@@ -368,7 +384,7 @@ export default function NewEntry() {
                     >
                       <span className="truncate">
                         {selectedIds.length === 0
-                          ? "Select painters..."
+                          ? "Select crew..."
                           : selectedIds.length === 1
                             ? opts.paintersState.find((r) => r.painterId === selectedIds[0])?.painterName ?? "1 selected"
                             : `${selectedIds.length} selected`}
@@ -387,20 +403,32 @@ export default function NewEntry() {
                       />
                     </div>
                     <div className="space-y-0.5">
-                      {filteredPainters.map((p) => (
+                      {filteredCrew.map((p) => {
+                        const roleText = p.roles.includes("foreman") && p.roles.includes("painter")
+                          ? "Painter + Foreman"
+                          : p.roles.includes("foreman")
+                            ? "Foreman"
+                            : "Painter"
+                        return (
                         <label
                           key={p.id}
-                          className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-2 hover:bg-gray-100"
+                          className={`flex items-center gap-2 rounded-md px-2 py-2 ${p.syncReady ? "cursor-pointer hover:bg-gray-100" : "cursor-not-allowed bg-amber-50 text-amber-900"}`}
                         >
                           <input
                             type="checkbox"
-                            checked={selectedIds.includes(p.id)}
+                            checked={p.painterId ? selectedIds.includes(p.painterId) : false}
+                            disabled={!p.syncReady}
                             onChange={() => togglePainter(p.id)}
                             className="rounded border-gray-300 text-primary focus:ring-primary"
                           />
-                          <span className="text-sm font-medium text-gray-800">{p.name}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-gray-800">{p.name}</span>
+                            <span className="block text-[11px] text-gray-500">
+                              {roleText}{!p.syncReady ? " - needs Painter match" : ""}
+                            </span>
+                          </span>
                         </label>
-                      ))}
+                      )})}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -415,7 +443,7 @@ export default function NewEntry() {
                     className={opts.cardRowClassName ?? "p-4 rounded-lg border border-gray-200 bg-gray-50/50 space-y-3"}
                   >
                     <div className="flex justify-between items-center">
-                      <Label className="text-gray-600 text-sm font-medium">{row.painterName || `Painter ${index + 1}`}</Label>
+                      <Label className="text-gray-600 text-sm font-medium">{row.painterName || `Crew ${index + 1}`}</Label>
                       {opts.paintersState.length > 1 && (
                         <button
                           type="button"
@@ -809,6 +837,141 @@ export default function NewEntry() {
     setTmWorkPerformedEditIndex((prev) => (prev === null ? null : prev === index ? null : prev > index ? prev - 1 : prev))
   }
 
+  const resetTmWorkPerformedDraft = () => {
+    setTmWorkPerformedArea("")
+    setTmWorkPerformedGroupKey("")
+    setTmWorkPerformedTaskValue("")
+    setTmWorkPerformedQuantity("")
+    setTmWorkPerformedPaintGallons("")
+    setTmWorkPerformedPrimerGallons("")
+    setTmWorkPerformedPrimerSource("stock")
+    setTmWorkPerformedLaborMinutes("")
+    setTmWorkPerformedCount("")
+    setTmWorkPerformedLinearFeet("")
+    setTmWorkPerformedStairFloors("")
+    setTmWorkPerformedDoorCount("")
+    setTmWorkPerformedWindowCount("")
+    setTmWorkPerformedHandrailCount("")
+    setTmWorkPerformedEditIndex(null)
+    setTmWorkPerformedValidationError(null)
+  }
+
+  const resetTmDraft = () => {
+    setTmTimeEntry(emptyTimeEntrySection())
+    setTmSundryItems([])
+    setTmWorkPerformedList([])
+    resetTmWorkPerformedDraft()
+  }
+
+  const tmBlockHasData = (block: TmBlock): boolean => {
+    const validPainters = block.timeEntry.painters.filter(
+      (p) => p.painterId && p.startTime && p.endTime && parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+    )
+    return (
+      validPainters.length > 0 ||
+      block.sundryItems.some((i) => i.quantity > 0) ||
+      block.workPerformedList.length > 0 ||
+      block.timeEntry.notes.trim().length > 0
+    )
+  }
+
+  const getTmBlockHours = (block: TmBlock): number =>
+    block.timeEntry.painters.reduce((sum, p) => {
+      if (!p.painterId || !p.startTime || !p.endTime) return sum
+      return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
+    }, 0)
+
+  const buildCurrentTmBlock = (id: string): TmBlock => ({
+    id,
+    timeEntry: {
+      notes: tmTimeEntry.notes,
+      painters: tmTimeEntry.painters.map((p) => ({ ...p })),
+    },
+    sundryItems: tmSundryItems.map((item) => ({ ...item })),
+    workPerformedList: tmWorkPerformedList.map((item) => ({
+      ...item,
+      measurements: item.measurements ? { ...item.measurements } : undefined,
+    })),
+  })
+
+  const getEffectiveTmBlocks = (): TmBlock[] => {
+    if (!activeTmBlockId) return tmBlocks
+    return tmBlocks.map((block) => (block.id === activeTmBlockId ? buildCurrentTmBlock(block.id) : block))
+  }
+
+  const loadTmBlockDraft = (block: TmBlock) => {
+    setTmTimeEntry({
+      notes: block.timeEntry.notes,
+      painters: block.timeEntry.painters.map((p) => ({ ...p })),
+    })
+    setTmSundryItems(block.sundryItems.map((item) => ({ ...item })))
+    setTmWorkPerformedList(block.workPerformedList.map((item) => ({
+      ...item,
+      measurements: item.measurements ? { ...item.measurements } : undefined,
+    })))
+    resetTmWorkPerformedDraft()
+  }
+
+  const saveActiveTmBlock = () => {
+    if (!activeTmBlockId) return
+    const updated = buildCurrentTmBlock(activeTmBlockId)
+    setTmBlocks((prev) => prev.map((block) => (block.id === activeTmBlockId ? updated : block)))
+  }
+
+  const openTmBlockEditor = (blockId: string) => {
+    if (activeTmBlockId && activeTmBlockId !== blockId) saveActiveTmBlock()
+    const block = tmBlocks.find((item) => item.id === blockId)
+    if (!block) return
+    loadTmBlockDraft(block)
+    setActiveTmBlockId(block.id)
+    setTmActiveTab("crew")
+    setTmDetailsOpen(true)
+    setTmExtraWorkEnabled(true)
+  }
+
+  const addTmBlock = () => {
+    if (!jobId) {
+      toast({
+        title: "Select a job first",
+        description: "Choose a job before adding T&M extra work.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (activeTmBlockId) saveActiveTmBlock()
+    const block = createTmBlock()
+    setTmBlocks((prev) => [...prev, block])
+    loadTmBlockDraft(block)
+    setActiveTmBlockId(block.id)
+    setTmActiveTab("crew")
+    setTmDetailsOpen(true)
+    setTmExtraWorkEnabled(true)
+  }
+
+  const closeTmEditor = () => {
+    saveActiveTmBlock()
+    setTmDetailsOpen(false)
+    setActiveTmBlockId(null)
+    resetTmDraft()
+  }
+
+  const removeTmBlock = (blockId: string) => {
+    setTmBlocks((prev) => prev.filter((block) => block.id !== blockId))
+    if (activeTmBlockId === blockId) {
+      setTmDetailsOpen(false)
+      setActiveTmBlockId(null)
+      resetTmDraft()
+    }
+  }
+
+  const clearTmData = () => {
+    setTmBlocks([])
+    setTmExtraWorkEnabled(false)
+    setTmDetailsOpen(false)
+    setActiveTmBlockId(null)
+    resetTmDraft()
+  }
+
   const handleSubmit = async () => {
     if (!jobId) {
       toast({ title: "Validation Error", description: "Please select a job", variant: "destructive" })
@@ -826,12 +989,12 @@ export default function NewEntry() {
       return endM > startM
     })
     if (validPainters.length === 0) {
-      toast({ title: "Validation Error", description: "Add at least one painter with From and To times (To must be after From).", variant: "destructive" })
+      toast({ title: "Validation Error", description: "Add at least one crew member with From and To times (To must be after From).", variant: "destructive" })
       return
     }
     const painterIds = new Set(validPainters.map((p) => p.painterId))
     if (painterIds.size !== validPainters.length) {
-      toast({ title: "Validation Error", description: "Each painter can only appear once", variant: "destructive" })
+      toast({ title: "Validation Error", description: "Each crew member can only appear once", variant: "destructive" })
       return
     }
 
@@ -854,18 +1017,51 @@ export default function NewEntry() {
       }
     }
 
+    const tmBlocksForSubmit = tmExtraWorkEnabled ? getEffectiveTmBlocks().filter(tmBlockHasData) : []
+    for (let i = 0; i < tmBlocksForSubmit.length; i++) {
+      const block = tmBlocksForSubmit[i]
+      const validTmPainters = block.timeEntry.painters.filter((p) => {
+        if (!p.painterId || !p.startTime || !p.endTime) return false
+        return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+      })
+      const selectedTmRows = block.timeEntry.painters.filter((p) => p.painterId)
+      if (selectedTmRows.length > 0 && validTmPainters.length !== selectedTmRows.length) {
+        toast({
+          title: "T&M crew time incomplete",
+          description: `T&M block #${i + 1} has a crew member with missing or invalid From/To times.`,
+          variant: "destructive",
+        })
+        return
+      }
+      const tmPainterIds = new Set(validTmPainters.map((p) => p.painterId))
+      if (tmPainterIds.size !== validTmPainters.length) {
+        toast({
+          title: "Duplicate T&M crew member",
+          description: `Each crew member can only appear once within T&M block #${i + 1}.`,
+          variant: "destructive",
+        })
+        return
+      }
+      if (block.workPerformedList.length > 1) {
+        for (const item of block.workPerformedList) {
+          const groups = WORK_PERFORMED_STRUCTURE[item.area]
+          const group = groups?.find((g) => g.key === item.groupCode)
+          const task = group?.tasks.find((t) => t.value === item.taskCode)
+          const showLabor = task?.meta?.showLaborMinutes ?? true
+          if (showLabor && (item.laborMinutes == null || item.laborMinutes <= 0)) {
+            toast({
+              title: "T&M labor time required",
+              description: `With multiple T&M tasks, each task in block #${i + 1} needs labor hours.`,
+              variant: "destructive",
+            })
+            return
+          }
+        }
+      }
+    }
+
     setIsSubmitting(true)
     try {
-      const tmValidPainters = tmExtraWorkEnabled && tmTimeEntry
-        ? tmTimeEntry.painters.filter((p) => {
-          if (!p.painterId || !p.startTime || !p.endTime) return false
-          return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
-        })
-        : []
-      const tmHoursTotal = tmExtraWorkEnabled
-        ? tmValidPainters.reduce((sum, p) => sum + computeHours(p.startTime, p.endTime, p.lunchDuration), 0)
-        : 0
-
       // Primary structured work record: Work Performed (activities, quantities, materials). Notes are optional supplementary.
       const workPerformedPayload = workPerformedList.map((wp, index) => ({
         area: wp.area,
@@ -906,18 +1102,23 @@ export default function NewEntry() {
         }),
       }
 
-      const tmEntries = tmExtraWorkEnabled && tmTimeEntry
-        ? [{
+      const tmEntries = tmBlocksForSubmit.map((block, blockIndex) => {
+        const tmValidPainters = block.timeEntry.painters.filter((p) => {
+          if (!p.painterId || !p.startTime || !p.endTime) return false
+          return parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
+        })
+        const tmNotes = block.timeEntry.notes.trim()
+        return {
           jobId: mainEntry.jobId,
           jobName: mainEntry.jobName,
           date: mainEntry.date,
-          notes: (tmTimeEntry.notes ?? "").trim(),
+          notes: tmNotes,
           changeOrder: "",
-          displayLabel: (tmTimeEntry.notes ?? "").trim()
-            ? `T&M Extra Work - ${(tmTimeEntry.notes ?? "").trim()}`
-            : "T&M Extra Work #1",
-          sundryItems: tmSundryItems.filter((i) => i.quantity > 0),
-          workPerformed: tmWorkPerformedList.map((wp, index) => ({
+          displayLabel: tmNotes
+            ? `T&M Extra Work - ${tmNotes}`
+            : `T&M Extra Work #${blockIndex + 1}`,
+          sundryItems: block.sundryItems.filter((i) => i.quantity > 0),
+          workPerformed: block.workPerformedList.map((wp, index) => ({
             area: wp.area,
             groupCode: wp.groupCode,
             groupLabel: wp.groupLabel,
@@ -946,8 +1147,8 @@ export default function NewEntry() {
               lunchEnd,
             }
           }),
-        }]
-        : []
+        }
+      })
 
       const payload = {
         mainEntry,
@@ -964,7 +1165,25 @@ export default function NewEntry() {
       })
       const createdData = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(createdData?.error || "Failed to save timesheet")
+        const errorCode = typeof createdData?.code === "string" ? createdData.code : ""
+        if (errorCode === "STALE_FOREMAN") {
+          clearForeman()
+          router.replace("/select-foreman")
+        }
+        if (errorCode === "STALE_PROJECT") {
+          queryClient.invalidateQueries({ queryKey: ["projects"], refetchType: "active" })
+        }
+        if (errorCode === "STALE_PAINTER") {
+          queryClient.invalidateQueries({ queryKey: ["crew"], refetchType: "active" })
+          queryClient.invalidateQueries({ queryKey: ["painters"], refetchType: "active" })
+        }
+
+        const serverMessage = typeof createdData?.error === "string"
+          ? createdData.error
+          : typeof createdData?.details === "string"
+            ? createdData.details
+            : "Failed to save timesheet"
+        throw new Error(serverMessage)
       }
       const mainTotalCrewHours = validPainters.reduce((sum, p) => {
         const { lunchStart, lunchEnd } = durationToLunchStartEnd(p.startTime, p.endTime, parseInt(p.lunchDuration, 10) || 0)
@@ -1019,44 +1238,13 @@ export default function NewEntry() {
     if (!p.painterId || !p.startTime || !p.endTime) return sum
     return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
   }, 0)
-  const tmHoursTotalPreview = (tmTimeEntry?.painters ?? []).reduce((sum, p) => {
-    if (!p.painterId || !p.startTime || !p.endTime) return sum
-    return sum + computeHours(p.startTime, p.endTime, p.lunchDuration)
-  }, 0)
-
-  const hasTmData =
-    tmExtraWorkEnabled &&
-    (() => {
-      const validPainters = (tmTimeEntry?.painters ?? []).filter(
-        (p) => p.painterId && p.startTime && p.endTime && parseTimeToMinutes(p.endTime) > parseTimeToMinutes(p.startTime)
-      )
-      const hasSundries = (tmSundryItems ?? []).some((i) => i.quantity > 0)
-      const hasWork = (tmWorkPerformedList ?? []).length > 0
-      return validPainters.length > 0 || hasSundries || hasWork
-    })()
-
-  const clearTmData = () => {
-    setTmTimeEntry({ painters: [], notes: "" })
-    setTmSundryItems([])
-    setTmWorkPerformedList([])
-    setTmWorkPerformedArea("")
-    setTmWorkPerformedGroupKey("")
-    setTmWorkPerformedTaskValue("")
-    setTmWorkPerformedQuantity("")
-    setTmWorkPerformedPaintGallons("")
-    setTmWorkPerformedPrimerGallons("")
-    setTmWorkPerformedPrimerSource("stock")
-    setTmWorkPerformedLaborMinutes("")
-    setTmWorkPerformedCount("")
-    setTmWorkPerformedLinearFeet("")
-    setTmWorkPerformedStairFloors("")
-    setTmWorkPerformedDoorCount("")
-    setTmWorkPerformedWindowCount("")
-    setTmWorkPerformedHandrailCount("")
-    setTmWorkPerformedEditIndex(null)
-    setTmWorkPerformedValidationError(null)
-    setTmDetailsOpen(false)
-  }
+  const effectiveTmBlocksPreview = tmExtraWorkEnabled ? getEffectiveTmBlocks() : []
+  const visibleTmBlocks = effectiveTmBlocksPreview.filter(tmBlockHasData)
+  const tmHoursTotalPreview = visibleTmBlocks.reduce((sum, block) => sum + getTmBlockHours(block), 0)
+  const hasTmData = tmExtraWorkEnabled && visibleTmBlocks.length > 0
+  const activeTmBlockNumber = activeTmBlockId
+    ? Math.max(1, tmBlocks.findIndex((block) => block.id === activeTmBlockId) + 1)
+    : 1
 
   return (
     <Layout>
@@ -1216,7 +1404,6 @@ export default function NewEntry() {
                           painters: typeof updater === "function" ? updater(prev.painters) : updater,
                         })),
                       hoursPrefix: "Hours",
-                      foremanEntry: selectedForeman ? { id: selectedForeman.id, name: selectedForeman.name } : null,
                     })}
 
                     <section>
@@ -1241,8 +1428,8 @@ export default function NewEntry() {
                 return customerWorkContent
               })()}
 
-              <div className={tmExtraWorkEnabled ? "" : "-mt-2"}>
-                <label className={`flex items-center justify-between gap-3 cursor-pointer ${tmExtraWorkEnabled ? "mb-3" : ""}`}>
+              <div className={tmExtraWorkEnabled ? "space-y-3" : "-mt-2"}>
+                <label className={`flex items-center justify-between gap-3 cursor-pointer ${tmExtraWorkEnabled ? "" : ""}`}>
                   <span className="text-lg font-bold text-gray-800">T&amp;M Extra Work</span>
                   <input
                     type="checkbox"
@@ -1260,61 +1447,77 @@ export default function NewEntry() {
                       }
                       setTmExtraWorkEnabled(next)
                       if (next) {
-                        setTmDetailsOpen(true)
-                        setTmActiveTab("crew")
-                        setTmTimeEntry((prev) => prev ?? { painters: [], notes: "" })
+                        if (tmBlocks.length === 0) addTmBlock()
                       } else {
                         setCustomerWorkOpen(true)
-                        setTmTimeEntry(null)
-                        setTmSundryItems([])
-                        setTmWorkPerformedList([])
-                        setTmDetailsOpen(false)
+                        clearTmData()
                       }
                     }}
                     className="rounded border-gray-300 text-primary focus:ring-primary"
                   />
                 </label>
 
-                {tmExtraWorkEnabled && !hasTmData && (
-                  <button
-                    type="button"
-                    onClick={() => setTmDetailsOpen(true)}
-                    className="mt-2 inline-flex items-center justify-center px-4 py-2 rounded-md border border-primary text-primary text-sm font-semibold bg-primary/5 hover:bg-primary/10"
-                  >
-                    <ClipboardList size={16} className="mr-2" />
-                    Add T&amp;M Details
-                  </button>
-                )}
-                {hasTmData && (
-                  <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-gray-800">T&amp;M Extra Work</h3>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {(tmTimeEntry?.painters ?? []).filter((p) => p.painterId && p.startTime && p.endTime).length} painter(s) • {tmHoursTotalPreview.toFixed(1)} hrs
-                          {(tmSundryItems ?? []).some((i) => i.quantity > 0) && " • Sundries"}
-                          {(tmWorkPerformedList ?? []).length > 0 && ` • ${tmWorkPerformedList.length} task(s)`}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setTmDetailsOpen(true)}
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={clearTmData}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          aria-label="Remove T&M"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                {tmExtraWorkEnabled && (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={addTmBlock}
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-primary text-primary text-sm font-semibold bg-primary/5 hover:bg-primary/10"
+                      >
+                        <ClipboardList size={16} className="mr-2" />
+                        Add T&amp;M Block
+                      </button>
+                      {hasTmData && (
+                        <span className="text-xs text-gray-500">
+                          {visibleTmBlocks.length} block(s) • {tmHoursTotalPreview.toFixed(1)} hrs
+                        </span>
+                      )}
                     </div>
-                  </div>
+
+                    {tmBlocks.length > 0 && (
+                      <div className="space-y-2">
+                        {tmBlocks.map((block, index) => {
+                          const blockHours = getTmBlockHours(block)
+                          const validCrewCount = block.timeEntry.painters.filter((p) => p.painterId && p.startTime && p.endTime).length
+                          const hasSundries = block.sundryItems.some((i) => i.quantity > 0)
+                          const hasWork = block.workPerformedList.length > 0
+                          const title = block.timeEntry.notes.trim() || `T&M Extra Work #${index + 1}`
+                          return (
+                            <div key={block.id} className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <h3 className="text-sm font-semibold text-gray-800 truncate">{title}</h3>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {validCrewCount} crew member(s) • {blockHours.toFixed(1)} hrs
+                                    {hasSundries && " • Sundries"}
+                                    {hasWork && ` • ${block.workPerformedList.length} task(s)`}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openTmBlockEditor(block.id)}
+                                    className="text-xs font-medium text-primary hover:underline"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTmBlock(block.id)}
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                    aria-label={`Remove T&M block ${index + 1}`}
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1816,19 +2019,19 @@ export default function NewEntry() {
           )}
         </div>
       </main>
-      {tmDetailsOpen && tmExtraWorkEnabled && (
+      {tmDetailsOpen && tmExtraWorkEnabled && activeTmBlockId && (
         <div className="fixed inset-0 z-30 bg-black/40 flex items-stretch justify-center">
           <div className="relative bg-white w-full max-w-2xl md:max-w-xl lg:max-w-2xl h-full md:h-[90vh] md:mt-4 md:rounded-xl shadow-lg flex flex-col">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-800">T&amp;M Extra Work</p>
+                <p className="text-sm font-semibold text-gray-800">T&amp;M Extra Work #{activeTmBlockNumber}</p>
                 <p className="text-xs text-gray-500">
                   {selectedJobName} • {date || "No date"}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setTmDetailsOpen(false)}
+                onClick={closeTmEditor}
                 className="text-gray-500 hover:text-gray-700 text-sm font-medium"
               >
                 Close
@@ -1865,7 +2068,7 @@ export default function NewEntry() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-              {tmActiveTab === "crew" && tmTimeEntry && (
+              {tmActiveTab === "crew" && (
                 <>
                   {renderCrewTimeEntrySection({
                     title: "T&M Crew",
@@ -1874,7 +2077,6 @@ export default function NewEntry() {
                     paintersState: tmTimeEntry.painters,
                     setPaintersState: (updater) =>
                       setTmTimeEntry((prev) => {
-                        if (!prev) return prev
                         return {
                           ...prev,
                           painters: typeof updater === "function" ? updater(prev.painters) : updater,
@@ -1882,7 +2084,6 @@ export default function NewEntry() {
                       }),
                     hoursPrefix: "T&M hours",
                     cardRowClassName: "p-4 rounded-lg border border-gray-200 bg-gray-50/50 space-y-3",
-                    foremanEntry: selectedForeman ? { id: selectedForeman.id, name: selectedForeman.name } : null,
                   })}
 
                   <TextAreaField
@@ -1891,7 +2092,7 @@ export default function NewEntry() {
                     placeholder="Describe T&amp;M extra work..."
                     value={tmTimeEntry.notes}
                     onChange={(e) =>
-                      setTmTimeEntry((prev) => (prev ? { ...prev, notes: e.target.value } : prev))
+                      setTmTimeEntry((prev) => ({ ...prev, notes: e.target.value }))
                     }
                     rows={2}
                     className="w-full"
@@ -2263,7 +2464,7 @@ export default function NewEntry() {
               {tmActiveTab === "work" && (
                 <button
                   type="button"
-                  onClick={() => setTmDetailsOpen(false)}
+                  onClick={closeTmEditor}
                   className="inline-flex items-center px-5 py-2.5 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
                 >
                   Done
